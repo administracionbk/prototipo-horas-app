@@ -174,7 +174,7 @@ function PantallaPIN({onSuccess,onBack}){
     setPin(n); setErr(false);
     if(n.length===4){
       setTimeout(()=>{
-        if(n==="1234") onSuccess();
+        if(n==="2014") onSuccess();
         else{setShake(true);setErr(true);setTimeout(()=>{setPin("");setShake(false);},700);}
       },200);
     }
