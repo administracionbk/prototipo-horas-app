@@ -1124,7 +1124,17 @@ export default function App(){
       setSaveError("");
       try {
         await supabase.from("proyectos").upsert(proyectos.map(toDbProyecto),{onConflict:"id"});
+        const { data: proyExist } = await supabase.from("proyectos").select("id");
+        const proyIds = new Set(proyectos.map(p => p.id));
+        for(const row of proyExist || []) {
+          if(!proyIds.has(row.id)) await supabase.from("proyectos").delete().eq("id", row.id);
+        }
         await supabase.from("empleados").upsert(empleados.map(e=>({id:e.id,nombre:e.nombre,activo:e.activo,tarifa:e.tarifa})),{onConflict:"id"});
+        const { data: empExist } = await supabase.from("empleados").select("id");
+        const empIds = new Set(empleados.map(e => e.id));
+        for(const row of empExist || []) {
+          if(!empIds.has(row.id)) await supabase.from("empleados").delete().eq("id", row.id);
+        }
         await supabase.from("registros").upsert(registros.map(r=>({eid:r.eid,llenador_id:r.llenadorId,fecha:hoy(),items:r.items})),{onConflict:"eid,fecha"});
         if(papelera.length===0){
           const { data: paAll }=await supabase.from("papelera").select("id");
