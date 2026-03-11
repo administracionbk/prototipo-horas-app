@@ -8,34 +8,14 @@ const C = {
   green:"#10B981", red:"#EF4444", orange:"#F97316",
 };
 
-// ── DATOS DEMO ────────────────────────────────────────────────
-const PROY0 = [
-  {id:1,nombre:"Casa Monterrey - Lote 14",activo:true,presupuesto:18000},
-  {id:2,nombre:"Bodega Industrial Norte",activo:true,presupuesto:32000},
-  {id:3,nombre:"Remodelación Oficinas Sky",activo:true,presupuesto:9500},
-  {id:4,nombre:"Fraccionamiento Los Pinos",activo:true,presupuesto:55000},
-  {id:5,nombre:"Plaza Comercial Oriente",activo:false,presupuesto:14000,cerradoEn:"Febrero 2025",gastoReal:13200,horas:160},
-  {id:6,nombre:"Nave Logística Sur",activo:false,presupuesto:28000,cerradoEn:"Enero 2025",gastoReal:31200,horas:380},
-  {id:7,nombre:"Oficinas Corporativas Vía",activo:false,presupuesto:45000,cerradoEn:"Diciembre 2024",gastoReal:41800,horas:510},
-];
-const EMP0 = [
-  {id:1,nombre:"Carlos Ramírez",activo:true,tarifa:85},
-  {id:2,nombre:"Luis Herrera",activo:true,tarifa:75},
-  {id:3,nombre:"Juan Torres",activo:true,tarifa:90},
-  {id:4,nombre:"Miguel Ángel Soto",activo:true,tarifa:95},
-  {id:5,nombre:"Roberto Mendoza",activo:true,tarifa:80},
-  {id:6,nombre:"Felipe Castro",activo:true,tarifa:70},
-  {id:7,nombre:"Andrés Vega",activo:true,tarifa:75},
-  {id:8,nombre:"Omar Jiménez",activo:true,tarifa:85},
-];
-// eid = empleado registrado, llenadorId = quien físicamente llenó
-// si llenadorId !== eid → registro por tercero
-const REG0 = [
-  {eid:1,llenadorId:1,items:[{pid:1,h:4},{pid:3,h:4}]},
-  {eid:3,llenadorId:3,items:[{pid:2,h:8}]},
-  {eid:4,llenadorId:2,items:[{pid:1,h:6},{pid:4,h:2}]}, // Luis llenó por Miguel
-  {eid:6,llenadorId:6,items:[{pid:2,h:5},{pid:4,h:3}]},
-];
+// ── DATOS DEMO (solo sin Supabase; en producción no se usan) ───
+// const PROY0 = [
+//   {id:1,nombre:"Casa Monterrey - Lote 14",activo:true,presupuesto:18000},
+//   {id:2,nombre:"Bodega Industrial Norte",activo:true,presupuesto:32000},
+//   ...
+// ];
+// const EMP0 = [ ... ];
+// const REG0 = [ ... ];
 
 const $$ = n => "$"+Number(n).toLocaleString("es-MX");
 
@@ -507,7 +487,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     const ahora = Date.now();
     const papeleraVigente = papelera.filter(x => ahora - x.deletedAt < DIAS * 864e5);
     if(papeleraVigente.length !== papelera.length) setPapelera(papeleraVigente);
-  },[papelera,setPapelera]);
+  },[papelera.length]);
 
   // Mover proyecto a papelera (guarda snapshot de sus registros)
   const moverAPapelera = (p) => {
@@ -1079,9 +1059,9 @@ export default function App(){
   const [screen,setScreen]=useState("home");
   const [authed,setAuthed]=useState(false);
   const [loading,setLoading]=useState(!!supabase);
-  const [proyectos,setProyectos]=useState(supabase?[]:PROY0);
-  const [empleados,setEmpleados]=useState(supabase?[]:EMP0);
-  const [registros,setRegistros]=useState(supabase?[]:REG0);
+  const [proyectos,setProyectos]=useState([]);
+  const [empleados,setEmpleados]=useState([]);
+  const [registros,setRegistros]=useState([]);
   const [papelera,setPapelera]=useState(supabase?[]:[
     {id:901,nombre:"Casas Infonavit Sector 3",activo:false,presupuesto:22000,deletedAt:Date.now()-5*864e5,registrosSnap:[{eid:2,llenadorId:2,items:[{pid:901,h:6}]},{eid:5,llenadorId:5,items:[{pid:901,h:8}]}]},
   ]);
@@ -1172,10 +1152,6 @@ export default function App(){
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 
     <div style={{position:"relative"}}>
-      <div style={{position:"absolute",top:-28,left:0,fontSize:11,color:"#444",letterSpacing:2,textTransform:"uppercase",fontWeight:600}}>
-        {screen==="home"?"P1 · Inicio":screen==="worker"?"P2 · Trabajador":screen==="pin"?"PIN":"P3 · Admin"}
-      </div>
-
       <div style={{width:390,background:"#0F0F0F",borderRadius:44,border:"1px solid #2A2A2A",boxShadow:"0 50px 100px #000b, 0 0 0 1px #ffffff06 inset",overflow:"hidden"}}>
         {/* notch */}
         <div style={{background:"#1A1A1A",height:46,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #2A2A2A",padding:"0 20px"}}>
