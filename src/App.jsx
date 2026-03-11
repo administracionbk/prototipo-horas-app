@@ -508,6 +508,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
   // Papelera: purgar expirados (>30 días) en efecto, no en render
   const DIAS = 30;
+  const ahora = Date.now();
+  const papeleraVigente = papelera.filter(x => ahora - x.deletedAt < DIAS * 864e5);
   useEffect(()=>{
     const ahora = Date.now();
     const papeleraVigente = papelera.filter(x => ahora - x.deletedAt < DIAS * 864e5);
@@ -954,12 +956,6 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         if(!p.closedAt) return true;
         return (ahoraCierre - p.closedAt) < DIAS_CIERRE * 864e5;
       });
-      if(cerrados.length !== cerradosRaw.length){
-        setProyectos(prev=>{
-          const vigentesIds = new Set(cerrados.map(c=>c.id));
-          return prev.filter(p=>p.activo || vigentesIds.has(p.id));
-        });
-      }
       return <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px"}}>
           <div style={{fontSize:12,color:C.muted,lineHeight:1.6}}>
