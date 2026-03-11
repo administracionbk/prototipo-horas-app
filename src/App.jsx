@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase, hoy } from "./supabaseClient";
 
 // ── TEMA ─────────────────────────────────────────────────────
@@ -488,15 +488,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const [errPresupuesto,setErrPresupuesto]=useState("");
   const [errTarifa,setErrTarifa]=useState("");
 
-  const eliminarEmpleadoConRegistros = async (emp) => {
+  const eliminarEmpleadoConRegistros = (emp) => {
     if(!emp) return;
-    try{
-      if(supabase){
-        await supabase.from("registros").delete().eq("eid", emp.id);
-      }
-    }catch(e){
-      console.warn("Error eliminando registros del empleado en Supabase",e);
-    }
     setRegistros(prev=>prev.filter(r=>r.eid!==emp.id));
     setEmpleados(prev=>prev.filter(x=>x.id!==emp.id));
     setDelEmp(null);
@@ -530,7 +523,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     // restaurar registros que no existan ya
     setRegistros(prev=>{
       let next=[...prev];
-      item.registrosSnap.forEach(snap=>{
+      (item.registrosSnap||[]).forEach(snap=>{
         if(!next.find(r=>r.eid===snap.eid)) next=[...next,snap];
       });
       return next;
@@ -846,7 +839,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         {papeleraVigente.map(item=>{
           const diasRestantes = Math.max(0, DIAS - Math.floor((ahora - item.deletedAt)/864e5));
           const urgente = diasRestantes<=7;
-          const totalH  = item.registrosSnap.reduce((a,r)=>a+r.items.filter(x=>x.pid===item.id).reduce((b,x)=>b+x.h,0),0);
+          const totalH  = (item.registrosSnap||[]).reduce((a,r)=>a+r.items.filter(x=>x.pid===item.id).reduce((b,x)=>b+x.h,0),0);
           return <div key={item.id} style={{background:C.surface,border:`1px solid ${urgente?C.red+"55":C.border}`,borderRadius:10,padding:"12px 14px",opacity:0.9}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
               <div style={{flex:1}}>
@@ -1077,8 +1070,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 }
 
 // ── HELPERS SUPABASE (mapeo DB ↔ app) ─────────────────────────
-function fromDbProyecto(r){ return r?{ id:r.id,nombre:r.nombre,activo:r.activo,presupuesto:r.presupuesto,cerradoEn:r.cerrado_en,gastoReal:r.gasto_real,horas:r.horas }:null; }
-function toDbProyecto(p){ return { id:p.id,nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto,cerrado_en:p.cerradoEn||null,gasto_real:p.gastoReal??null,horas:p.horas??null }; }
+function fromDbProyecto(r){ return r?{ id:r.id,nombre:r.nombre,activo:r.activo,presupuesto:r.presupuesto,cerradoEn:r.cerrado_en,gastoReal:r.gasto_real,horas:r.horas,closedAt:r.closed_at?new Date(r.closed_at).getTime():null,trabajadoresSnap:r.trabajadores_snap||null }:null; }
+function toDbProyecto(p){ return { id:p.id,nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto,cerrado_en:p.cerradoEn||null,gasto_real:p.gastoReal??null,horas:p.horas??null,closed_at:p.closedAt?new Date(p.closedAt).toISOString():null,trabajadores_snap:p.trabajadoresSnap||null }; }
 function fromDbRegistro(r){ return r?{ eid:r.eid,llenadorId:r.llenador_id,items:r.items||[] }:null; }
 
 // ── ROOT ──────────────────────────────────────────────────────
@@ -1094,6 +1087,7 @@ export default function App(){
   ]);
   const [saving,setSaving]=useState(false);
   const [saveError,setSaveError]=useState("");
+  const isFirstSync = useRef(true);
 
   // Cargar datos desde Supabase al montar
   useEffect(()=>{
@@ -1118,8 +1112,12 @@ export default function App(){
   // Persistir a Supabase cuando cambie el estado
   useEffect(()=>{
     if(!supabase||loading) return;
-    const t=Date.now();
     (async ()=>{
+      if(isFirstSync.current){
+        isFirstSync.current = false;
+        setSaving(false);
+        return;
+      }
       setSaving(true);
       setSaveError("");
       try {
