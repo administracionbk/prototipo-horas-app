@@ -139,7 +139,7 @@ function HourPicker({value,onChange}){
   </div>;
 }
 
-function ProyectoSelector({proyectos,selec,setSelec,horas,setHoras}){
+function ProyectoSelector({proyectos,selec,setSelec,horas,setHoras,extraVisibleIds=[]}){
   const toggle = id => {
     setSelec(p => p.includes(id) ? p.filter(x=>x!==id) : [...p,id]);
     if(selec.includes(id)) setHoras(h=>{const n={...h};delete n[id];return n;});
@@ -150,12 +150,15 @@ function ProyectoSelector({proyectos,selec,setSelec,horas,setHoras}){
   const falta = !esJornada && totalH < 8;
   const excede = totalH > 8;
   return <div style={{display:"flex",flexDirection:"column",gap:10}}>
-    {proyectos.filter(p=>p.activo).map(p=>{
+    {proyectos.filter(p=>p.activo || extraVisibleIds.includes(p.id)).map(p=>{
       const sel=selec.includes(p.id);
       return <div key={p.id} style={{background:sel?C.accent+"11":C.surface,border:`1px solid ${sel?C.accent:C.border}`,borderRadius:10,padding:"12px 14px",cursor:"pointer",userSelect:"none"}} onClick={()=>toggle(p.id)}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${sel?C.accent:C.border}`,background:sel?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#000",fontWeight:900,flexShrink:0}}>{sel?"✓":""}</div>
-          <span style={{fontSize:13,color:C.text,fontWeight:sel?600:400}}>{p.nombre}</span>
+          <span style={{fontSize:13,color:C.text,fontWeight:sel?600:400}}>
+            {p.nombre}
+            {!p.activo && <span style={{marginLeft:6,fontSize:11,color:C.muted}}>· Cerrado</span>}
+          </span>
         </div>
         {sel&&<div style={{marginTop:10,display:"flex",alignItems:"center",gap:8}} onClick={e=>e.stopPropagation()}>
           <span style={{fontSize:12,color:C.muted,flexShrink:0}}>Horas:</span>
@@ -244,12 +247,11 @@ function PantallaPIN({onSuccess,onBack}){
         <button key={i} onClick={()=>d==="⌫"?del():d!==""?press(String(d)):null} disabled={d===""} style={{height:62,borderRadius:12,background:d===""?"transparent":C.surface,border:d===""?"none":`1px solid ${C.border}`,color:d==="⌫"?C.muted:C.text,fontSize:d==="⌫"?20:22,fontWeight:700,cursor:d===""?"default":"pointer",fontFamily:"inherit"}}>{d}</button>
       ))}
     </div>
-    <div style={{fontSize:11,color:C.muted}}>PIN demo: <strong style={{color:C.accent}}>1234</strong></div>
   </div>;
 }
 
 // ── PANTALLA TRABAJADOR ───────────────────────────────────────
-function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack}){
+function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,saving,saveError}){
   const [step,setStep]         = useState("s1");
   const [llenador,setLlenador] = useState(null);
   const [target,setTarget]     = useState(null);
@@ -260,7 +262,9 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack}){
   const esMismo    = llenador && target && llenador.id === target.id;
   const regExist   = target ? registros.find(r => r.eid === target.id) : null;
   const totalH     = Object.values(horas).reduce((a,b) => a + (Number(b)||0), 0);
-  const canSend    = selec.length > 0 && selec.every(id => horas[id]);
+  const canSend    = selec.length > 0 && selec.every(id => (Number(horas[id])||0) > 0);
+  const tieneProgreso = step==="s3" && (selec.length>0 || Object.values(horas).some(h => (Number(h)||0) > 0));
+  const [confirmExit,setConfirmExit] = useState(false);
 
   function elegirLlenador(e){ setLlenador(e); setStep("s2"); }
 
@@ -284,12 +288,25 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack}){
     setStep("s4");
   }
 
+  function limpiarFlujo(){
+    setStep("s1");
+    setLlenador(null);
+    setTarget(null);
+    setSelec([]);
+    setHoras({});
+    setEditando(false);
+  }
+
   function goBack(){
+    if(step==="s3" && tieneProgreso){
+      setConfirmExit(true);
+      return;
+    }
     if(step==="s1") onBack();
     else if(step==="s2") setStep("s1");
     else if(step==="s2b") setStep("s2");
     else if(step==="s3") setStep("s2");
-    else { setStep("s1"); setLlenador(null); setTarget(null); setSelec([]); setHoras({}); setEditando(false); }
+    else { limpiarFlujo(); }
   }
 
   const titles = {s1:"¿Quién está llenando?",s2:"¿De quién son las horas?",s2b:"Ya registrado hoy",s3:editando?"Editar registro":"¿En qué trabajaste?",s4:"¡Listo!"};
@@ -306,6 +323,12 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack}){
         </div>
         <StepDots current={dotIdx} total={4}/>
       </div>
+
+      {saveError && (
+        <div style={{background:C.red+"22",border:`1px solid ${C.red}66`,borderRadius:8,padding:"8px 10px",fontSize:12,color:C.red,marginBottom:4}}>
+          No se pudo guardar. Verifica tu conexión e intenta de nuevo
+        </div>
+      )}
 
       {step==="s1" && (
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -383,8 +406,8 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack}){
             <strong style={{color:C.text}}>{target ? target.nombre : ""}</strong>:
           </div>
           <ProyectoSelector proyectos={proyectos} selec={selec} setSelec={setSelec} horas={horas} setHoras={setHoras}/>
-          <Btn onClick={enviar} full disabled={!canSend}>
-            {editando ? "Guardar corrección →" : "Enviar registro →"}
+          <Btn onClick={enviar} full disabled={!canSend || saving}>
+            {saving ? "Guardando..." : (editando ? "Guardar corrección →" : "Enviar registro →")}
           </Btn>
         </div>
       )}
@@ -417,10 +440,29 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack}){
               <span style={{color:C.accent,fontWeight:900,fontSize:15}}>{totalH}h</span>
             </div>
           </div>
-          <Btn onClick={()=>{ setStep("s1"); setLlenador(null); setTarget(null); setSelec([]); setHoras({}); setEditando(false); onBack(); }} variant="secondary">
+          <Btn onClick={()=>{
+            if(tieneProgreso){
+              setConfirmExit(true);
+            }else{
+              limpiarFlujo();
+              onBack();
+            }
+          }} variant="secondary">
             Volver al inicio
           </Btn>
         </div>
+      )}
+
+      {confirmExit && (
+        <Confirm
+          msg="¿Salir? Perderás el registro que estás llenando"
+          onOk={()=>{
+            setConfirmExit(false);
+            limpiarFlujo();
+            onBack();
+          }}
+          onCancel={()=>setConfirmExit(false)}
+        />
       )}
 
     </div>
@@ -428,13 +470,14 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack}){
 }
 
 // ── PANEL ADMIN ───────────────────────────────────────────────
-function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,onBack}){
+function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,onBack,saving,saveError}){
   const [tab,setTab]=useState("reporte");
 
   // Proyectos
   const [mproy,setMproy]=useState(null);
   const [fproy,setFproy]=useState({nombre:"",activo:true,presupuesto:""});
   const [delProy,setDelProy]=useState(null);
+  const [confirmCerrar,setConfirmCerrar]=useState(null);
   // Empleados
   const [memp,setMemp]=useState(null);
   const [femp,setFemp]=useState({nombre:"",activo:true,tarifa:""});
@@ -442,16 +485,34 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   // Papelera - borrado permanente
   const [delPerm1,setDelPerm1]=useState(null);
   const [delPerm2,setDelPerm2]=useState(null);
+  const [errPresupuesto,setErrPresupuesto]=useState("");
+  const [errTarifa,setErrTarifa]=useState("");
+
+  const eliminarEmpleadoConRegistros = async (emp) => {
+    if(!emp) return;
+    try{
+      if(supabase){
+        await supabase.from("registros").delete().eq("eid", emp.id);
+      }
+    }catch(e){
+      console.warn("Error eliminando registros del empleado en Supabase",e);
+    }
+    setRegistros(prev=>prev.filter(r=>r.eid!==emp.id));
+    setEmpleados(prev=>prev.filter(x=>x.id!==emp.id));
+    setDelEmp(null);
+  };
   // Corrección admin
   const [mcorr,setMcorr]=useState(null);
   const [cSelec,setCSelec]=useState([]);
   const [cHoras,setCHoras]=useState({});
 
-  // Papelera: purgar expirados (>30 días) en cada render
+  // Papelera: purgar expirados (>30 días) en efecto, no en render
   const DIAS = 30;
-  const ahora = Date.now();
-  const papeleraVigente = papelera.filter(x => ahora - x.deletedAt < DIAS * 864e5);
-  if(papeleraVigente.length !== papelera.length) setPapelera(papeleraVigente);
+  useEffect(()=>{
+    const ahora = Date.now();
+    const papeleraVigente = papelera.filter(x => ahora - x.deletedAt < DIAS * 864e5);
+    if(papeleraVigente.length !== papelera.length) setPapelera(papeleraVigente);
+  },[papelera,setPapelera]);
 
   // Mover proyecto a papelera (guarda snapshot de sus registros)
   const moverAPapelera = (p) => {
@@ -500,10 +561,15 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     const mes = new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
     const cerradoEn = mes.charAt(0).toUpperCase()+mes.slice(1);
     const closedAt = Date.now();
-    setProyectos(prev=>prev.map(x=>x.id===p.id?{...x,activo:false,cerradoEn,gastoReal,horas,trabajadoresSnap:rowsDet,closedAt}:x));
+    setProyectos(prev=>prev.map(x=>{
+      if(x.id!==p.id) return x;
+      const prevHist = Array.isArray(x.trabajadoresSnap)?x.trabajadoresSnap:[];
+      const trabajadoresSnap = [...prevHist,...rowsDet];
+      return {...x,activo:false,cerradoEn,gastoReal,horas,trabajadoresSnap,closedAt};
+    }));
   };
 
-  // Reabrir: solo vuelve activo:true, borra snapshot
+  // Reabrir: solo vuelve activo:true, conserva historial
   const reabrirProyecto = (p) => {
     setProyectos(prev=>prev.map(x=>x.id===p.id?{...x,activo:true,cerradoEn:null,gastoReal:null,horas:null}:x));
   };
@@ -511,19 +577,31 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   // ── proyectos handlers
   const guardarProy = () => {
     if(!fproy.nombre.trim()) return;
-    const d={nombre:fproy.nombre.trim(),activo:fproy.activo,presupuesto:Number(fproy.presupuesto)||0};
+    const presupuestoNum = Number(fproy.presupuesto)||0;
+    if(presupuestoNum<=0){
+      setErrPresupuesto("El presupuesto no puede ser $0");
+      return;
+    }
+    const d={nombre:fproy.nombre.trim(),activo:fproy.activo,presupuesto:presupuestoNum};
     if(mproy==="nuevo") setProyectos(p=>[...p,{id:(typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():String(Date.now())),...d}]);
     else setProyectos(p=>p.map(x=>x.id===mproy?{...x,...d}:x));
     setMproy(null);
+    setErrPresupuesto("");
   };
 
   // ── empleados handlers
   const guardarEmp = () => {
     if(!femp.nombre.trim()) return;
-    const d={nombre:femp.nombre.trim(),activo:femp.activo,tarifa:Number(femp.tarifa)||0};
+    const tarifaNum = Number(femp.tarifa)||0;
+    if(tarifaNum<=0){
+      setErrTarifa("La tarifa no puede ser $0");
+      return;
+    }
+    const d={nombre:femp.nombre.trim(),activo:femp.activo,tarifa:tarifaNum};
     if(memp==="nuevo") setEmpleados(e=>[...e,{id:(typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():String(Date.now())),...d}]);
     else setEmpleados(e=>e.map(x=>x.id===memp?{...x,...d}:x));
     setMemp(null);
+    setErrTarifa("");
   };
 
   // ── corrección
@@ -582,6 +660,12 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         {proxies.length>0&&<div style={{background:C.red+"22",border:`1px solid ${C.red}44`,borderRadius:20,padding:"3px 9px",fontSize:11,fontWeight:700,color:C.red}}>👤 {proxies.length} por tercero</div>}
       </div>}
     </div>
+
+    {saveError && (
+      <div style={{background:C.red+"22",border:`1px solid ${C.red}66`,borderRadius:8,padding:"8px 10px",fontSize:12,color:C.red,marginBottom:12,marginTop:-8}}>
+        No se pudo guardar. Verifica tu conexión e intenta de nuevo
+      </div>
+    )}
 
     {/* tabs */}
     <div style={{display:"flex",gap:6,marginBottom:16}}>
@@ -676,21 +760,27 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       })}
 
       {/* Correcciones */}
-      {registros.length>0&&<>
-        <div style={{fontSize:11,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginTop:4}}>Corregir registros</div>
-        {activos.filter(e=>registros.find(r=>r.eid===e.id)).map(e=>{
-          const reg=registros.find(r=>r.eid===e.id);
-          const porTercero=reg.llenadorId!==reg.eid;
-          const llenador=empleados.find(x=>x.id===reg.llenadorId);
-          return <div key={e.id} style={{background:porTercero?C.red+"08":C.surface,border:`1px solid ${porTercero?C.red+"44":C.border}`,borderRadius:10,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <div style={{fontSize:13,color:C.text,fontWeight:600}}>{e.nombre}</div>
-              {porTercero&&<div style={{fontSize:11,color:C.red,marginTop:2}}>👤 llenado por {llenador?.nombre}</div>}
-            </div>
-            <button onClick={()=>abrirCorr(e.id)} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️ Editar</button>
-          </div>;
-        })}
-      </>}
+      {(()=>{
+        const conRegistros = activos.filter(e=>registros.find(r=>r.eid===e.id));
+        if(conRegistros.length===0) return null;
+        return (
+          <>
+            <div style={{fontSize:11,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginTop:4}}>Corregir registros</div>
+            {conRegistros.map(e=>{
+              const reg=registros.find(r=>r.eid===e.id);
+              const porTercero=reg.llenadorId!==reg.eid;
+              const llenador=empleados.find(x=>x.id===reg.llenadorId);
+              return <div key={e.id} style={{background:porTercero?C.red+"08":C.surface,border:`1px solid ${porTercero?C.red+"44":C.border}`,borderRadius:10,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:13,color:C.text,fontWeight:600}}>{e.nombre}</div>
+                  {porTercero&&<div style={{fontSize:11,color:C.red,marginTop:2}}>👤 llenado por {llenador?.nombre}</div>}
+                </div>
+                <button onClick={()=>abrirCorr(e.id)} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️ Editar</button>
+              </div>;
+            })}
+          </>
+        );
+      })()}
 
       {/* Botón de exportar eliminado según requerimiento */}
     </div>}
@@ -709,22 +799,37 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           </div>
           <div style={{display:"flex",gap:6,flexShrink:0}}>
             <button onClick={()=>{setFproy({nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto});setMproy(p.id);}} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
-            <button onClick={()=>cerrarProyecto(p)} style={{background:C.orange+"11",border:`1px solid ${C.orange}44`,borderRadius:8,padding:"6px 10px",color:C.orange,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🔒 Cerrar</button>
+            <button
+              onClick={()=>{
+                const tieneHoras = registros.some(reg =>
+                  (reg.items||[]).some(it => it.pid===p.id && (Number(it.h)||0) > 0)
+                );
+                if(!tieneHoras) setConfirmCerrar(p);
+                else cerrarProyecto(p);
+              }}
+              style={{background:C.orange+"11",border:`1px solid ${C.orange}44`,borderRadius:8,padding:"6px 10px",color:C.orange,fontSize:12,cursor:saving?"not-allowed":"pointer",opacity:saving?0.6:1,fontFamily:"inherit"}}
+              disabled={saving}
+            >
+              🔒 Cerrar
+            </button>
             <button onClick={()=>setDelProy(p)} style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:8,padding:"6px 10px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🗑️</button>
           </div>
         </div>
       </div>)}
 
-      {mproy&&<Sheet title={mproy==="nuevo"?"Nuevo proyecto":"Editar proyecto"} onClose={()=>setMproy(null)}>
+      {mproy&&<Sheet title={mproy==="nuevo"?"Nuevo proyecto":"Editar proyecto"} onClose={()=>{setMproy(null);setErrPresupuesto("");}}>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <Field label="Nombre del proyecto" value={fproy.nombre} onChange={e=>setFproy(f=>({...f,nombre:e.target.value}))} placeholder="Ej. Casa García - Lote 22"/>
-          <Field label="Presupuesto de M.O. ($)" value={String(fproy.presupuesto)} onChange={e=>setFproy(f=>({...f,presupuesto:e.target.value}))} placeholder="Ej. 25000" type="number"/>
+          <Field label="Presupuesto de M.O. ($)" value={String(fproy.presupuesto)} onChange={e=>{setFproy(f=>({...f,presupuesto:e.target.value}));setErrPresupuesto("");}} placeholder="Ej. 25000" type="number"/>
+          {errPresupuesto&&<div style={{fontSize:12,color:C.red,marginTop:4}}>{errPresupuesto}</div>}
           <div><div style={{fontSize:12,color:C.muted,marginBottom:8}}>Estatus</div>
             <Toggle value={fproy.activo} onChange={v=>setFproy(f=>({...f,activo:v}))} opts={[{v:true,l:"✅ Activo"},{v:false,l:"🔒 Cerrado"}]}/>
           </div>
           <div style={{display:"flex",gap:8}}>
             <Btn onClick={()=>setMproy(null)} variant="secondary" full>Cancelar</Btn>
-            <Btn onClick={guardarProy} full>{mproy==="nuevo"?"Agregar":"Guardar"}</Btn>
+            <Btn onClick={guardarProy} full disabled={saving}>
+              {saving ? "Guardando..." : (mproy==="nuevo"?"Agregar":"Guardar")}
+            </Btn>
           </div>
         </div>
       </Sheet>}
@@ -779,6 +884,11 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         onOk={()=>{setPapelera(prev=>prev.filter(x=>x.id!==delPerm2.id));setDelPerm2(null);}}
         onCancel={()=>setDelPerm2(null)}
       />}
+      {confirmCerrar&&<Confirm
+        msg={`Este proyecto no tiene horas registradas hoy. ¿Seguro que quieres cerrarlo?`}
+        onOk={()=>{cerrarProyecto(confirmCerrar);setConfirmCerrar(null);}}
+        onCancel={()=>setConfirmCerrar(null)}
+      />}
     </div>}
 
     {/* ── TAB EMPLEADOS ── */}
@@ -812,20 +922,27 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         </div>;
       })}
 
-      {memp&&<Sheet title={memp==="nuevo"?"Nuevo empleado":"Editar empleado"} onClose={()=>setMemp(null)}>
+      {memp&&<Sheet title={memp==="nuevo"?"Nuevo empleado":"Editar empleado"} onClose={()=>{setMemp(null);setErrTarifa("");}}>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <Field label="Nombre completo" value={femp.nombre} onChange={e=>setFemp(f=>({...f,nombre:e.target.value}))} placeholder="Ej. Juan Martínez"/>
-          <Field label="Costo por hora ($)" value={String(femp.tarifa)} onChange={e=>setFemp(f=>({...f,tarifa:e.target.value}))} placeholder="Ej. 85" type="number"/>
+          <Field label="Costo por hora ($)" value={String(femp.tarifa)} onChange={e=>{setFemp(f=>({...f,tarifa:e.target.value}));setErrTarifa("");}} placeholder="Ej. 85" type="number"/>
+          {errTarifa&&<div style={{fontSize:12,color:C.red,marginTop:4}}>{errTarifa}</div>}
           <div><div style={{fontSize:12,color:C.muted,marginBottom:8}}>Estatus</div>
             <Toggle value={femp.activo} onChange={v=>setFemp(f=>({...f,activo:v}))} opts={[{v:true,l:"✅ Activo"},{v:false,l:"⛔ Inactivo"}]}/>
           </div>
           <div style={{display:"flex",gap:8}}>
             <Btn onClick={()=>setMemp(null)} variant="secondary" full>Cancelar</Btn>
-            <Btn onClick={guardarEmp} full>{memp==="nuevo"?"Agregar":"Guardar"}</Btn>
+            <Btn onClick={guardarEmp} full disabled={saving}>
+              {saving ? "Guardando..." : (memp==="nuevo"?"Agregar":"Guardar")}
+            </Btn>
           </div>
         </div>
       </Sheet>}
-      {delEmp&&<Confirm msg={`¿Eliminar a "${delEmp.nombre}"?`} onOk={()=>{setEmpleados(e=>e.filter(x=>x.id!==delEmp.id));setDelEmp(null);}} onCancel={()=>setDelEmp(null)}/>}
+      {delEmp&&<Confirm
+        msg={`¿Eliminar a "${delEmp.nombre}"? Se borrarán también sus registros de hoy.`}
+        onOk={()=>eliminarEmpleadoConRegistros(delEmp)}
+        onCancel={()=>setDelEmp(null)}
+      />}
     </div>}
 
     {/* ── TAB CIERRE MENSUAL ── */}
@@ -951,10 +1068,12 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     {/* Modal corrección admin */}
     {mcorr&&<Sheet title={`Corregir — ${empleados.find(e=>e.id===mcorr)?.nombre}`} onClose={()=>setMcorr(null)}>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        <ProyectoSelector proyectos={proyectos} selec={cSelec} setSelec={setCSelec} horas={cHoras} setHoras={setCHoras}/>
+        <ProyectoSelector proyectos={proyectos} selec={cSelec} setSelec={setCSelec} horas={cHoras} setHoras={setCHoras} extraVisibleIds={cSelec}/>
         <div style={{display:"flex",gap:8,marginTop:4}}>
           <Btn onClick={()=>setMcorr(null)} variant="secondary" full>Cancelar</Btn>
-          <Btn onClick={guardarCorr} full>Guardar</Btn>
+          <Btn onClick={guardarCorr} full disabled={saving}>
+            {saving ? "Guardando..." : "Guardar"}
+          </Btn>
         </div>
       </div>
     </Sheet>}
@@ -977,6 +1096,8 @@ export default function App(){
   const [papelera,setPapelera]=useState(supabase?[]:[
     {id:901,nombre:"Casas Infonavit Sector 3",activo:false,presupuesto:22000,deletedAt:Date.now()-5*864e5,registrosSnap:[{eid:2,llenadorId:2,items:[{pid:901,h:6}]},{eid:5,llenadorId:5,items:[{pid:901,h:8}]}]},
   ]);
+  const [saving,setSaving]=useState(false);
+  const [saveError,setSaveError]=useState("");
 
   // Cargar datos desde Supabase al montar
   useEffect(()=>{
@@ -1003,6 +1124,8 @@ export default function App(){
     if(!supabase||loading) return;
     const t=Date.now();
     (async ()=>{
+      setSaving(true);
+      setSaveError("");
       try {
         await supabase.from("proyectos").upsert(proyectos.map(toDbProyecto),{onConflict:"id"});
         await supabase.from("empleados").upsert(empleados.map(e=>({id:e.id,nombre:e.nombre,activo:e.activo,tarifa:e.tarifa})),{onConflict:"id"});
@@ -1017,7 +1140,12 @@ export default function App(){
           const idsInState=new Set(papelera.map(x=>x.id));
           for(const row of paExist||[]){ if(!idsInState.has(row.proyecto_id)) await supabase.from("papelera").delete().eq("id",row.id); }
         }
-      } catch(e){ console.warn("Error guardando en Supabase",e); }
+      } catch(e){
+        console.warn("Error guardando en Supabase",e);
+        setSaveError("No se pudo guardar. Verifica tu conexión e intenta de nuevo");
+      } finally {
+        setSaving(false);
+      }
     })();
   },[proyectos,empleados,registros,papelera,loading]);
 
@@ -1057,9 +1185,9 @@ export default function App(){
 
         <div style={{padding:20,minHeight:580,maxHeight:700,overflowY:"auto"}}>
           {screen==="home"&&<PantallaInicio onSelect={ir}/>}
-          {screen==="worker"&&<PantallaTrabajador proyectos={proyectos} empleados={empleados} registros={registros} onGuardar={guardarRegistro} onBack={()=>setScreen("home")}/>}
+          {screen==="worker"&&<PantallaTrabajador proyectos={proyectos} empleados={empleados} registros={registros} onGuardar={guardarRegistro} onBack={()=>setScreen("home")} saving={saving} saveError={saveError}/>}
           {screen==="pin"&&<PantallaPIN onSuccess={()=>{setAuthed(true);setScreen("admin");}} onBack={()=>setScreen("home")}/>}
-          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} onBack={()=>{setAuthed(false);setScreen("home");}}/>}
+          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError}/>}
         </div>
 
         <div style={{height:22,background:"#1A1A1A",borderTop:"1px solid #2A2A2A",display:"flex",alignItems:"center",justifyContent:"center"}}>
