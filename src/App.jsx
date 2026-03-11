@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase, hoy } from "./lib/supabase";
+import { supabase, hoy } from "./supabaseClient";
 
 // ── TEMA ─────────────────────────────────────────────────────
 const C = {
@@ -38,6 +38,17 @@ const REG0 = [
 ];
 
 const $$ = n => "$"+Number(n).toLocaleString("es-MX");
+
+function formatHoras(h){
+  const v = Number(h) || 0;
+  if(v === 0) return "0h";
+  const entero = Math.floor(v);
+  const fraccion = v - entero;
+  if(entero === 0 && Math.abs(fraccion-0.5)<1e-6) return "30min";
+  if(Math.abs(fraccion-0.5)<1e-6) return `${entero}:30`;
+  if(Math.abs(fraccion)<1e-6) return `${entero}h`;
+  return `${v}h`;
+}
 
 // ── COMPONENTES BASE ─────────────────────────────────────────
 function Badge({label,color=C.accent}){
@@ -105,7 +116,26 @@ function StepDots({current,total}){
 
 function HourPicker({value,onChange}){
   return <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-    {[1,2,3,4,5,6,7,8,9].map(h=><button key={h} onClick={()=>onChange(h)} style={{width:34,height:34,borderRadius:7,background:value===h?C.accent:C.bg,border:`1px solid ${value===h?C.accent:C.border}`,color:value===h?"#000":C.text,fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{h}</button>)}
+    {Array.from({length:16},(_,i)=>0.5*(i+1)).map(h=>
+      <button
+        key={h}
+        onClick={()=>onChange(h)}
+        style={{
+          width:40,
+          height:34,
+          borderRadius:7,
+          background:value===h?C.accent:C.bg,
+          border:`1px solid ${value===h?C.accent:C.border}`,
+          color:value===h?"#000":C.text,
+          fontWeight:700,
+          fontSize:11,
+          cursor:"pointer",
+          fontFamily:"inherit"
+        }}
+      >
+        {formatHoras(h)}
+      </button>
+    )}
   </div>;
 }
 
@@ -115,6 +145,10 @@ function ProyectoSelector({proyectos,selec,setSelec,horas,setHoras}){
     if(selec.includes(id)) setHoras(h=>{const n={...h};delete n[id];return n;});
   };
   const totalH = Object.values(horas).reduce((a,b)=>a+(Number(b)||0),0);
+  const diff = 8 - totalH;
+  const esJornada = Math.abs(totalH-8)<1e-6;
+  const falta = !esJornada && totalH < 8;
+  const excede = totalH > 8;
   return <div style={{display:"flex",flexDirection:"column",gap:10}}>
     {proyectos.filter(p=>p.activo).map(p=>{
       const sel=selec.includes(p.id);
@@ -129,12 +163,23 @@ function ProyectoSelector({proyectos,selec,setSelec,horas,setHoras}){
         </div>}
       </div>;
     })}
-    {selec.length>0&&<div style={{background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${totalH===9?C.green:C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+    {selec.length>0&&<div style={{background:C.surface,borderRadius:10,padding:"11px 14px",border:`1px solid ${esJornada?C.green:C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
       <span style={{fontSize:13,color:C.muted}}>Total del día:</span>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:20,fontWeight:900,color:totalH>9?C.red:totalH===9?C.green:C.accent}}>{totalH}h</span>
-        {totalH===9&&<span style={{fontSize:12,color:C.green,fontWeight:700}}>✓ Jornada completa</span>}
-        {totalH>9&&<span style={{fontSize:12,color:C.red,fontWeight:700}}>Excede jornada</span>}
+        <span style={{fontSize:20,fontWeight:900,color:excede?C.red:esJornada?C.green:C.accent}}>
+          {formatHoras(totalH)}
+        </span>
+        {esJornada && (
+          <span style={{fontSize:12,color:C.green,fontWeight:700}}>✓ Jornada completa</span>
+        )}
+        {falta && (
+          <span style={{fontSize:12,color:C.orange,fontWeight:700}}>
+            Faltan {formatHoras(Math.max(0,diff))}
+          </span>
+        )}
+        {excede && (
+          <span style={{fontSize:12,color:C.red,fontWeight:700}}>Excede jornada</span>
+        )}
       </div>
     </div>}
   </div>;
@@ -394,6 +439,9 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const [memp,setMemp]=useState(null);
   const [femp,setFemp]=useState({nombre:"",activo:true,tarifa:""});
   const [delEmp,setDelEmp]=useState(null);
+  // Papelera - borrado permanente
+  const [delPerm1,setDelPerm1]=useState(null);
+  const [delPerm2,setDelPerm2]=useState(null);
   // Corrección admin
   const [mcorr,setMcorr]=useState(null);
   const [cSelec,setCSelec]=useState([]);
@@ -427,22 +475,32 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setPapelera(prev=>prev.filter(x=>x.id!==item.id));
   };
 
-  // Cerrar: marca activo:false y guarda snapshot de gasto en el mismo objeto
+  // Cerrar: marca activo:false y guarda snapshot de gasto y desglose por trabajador
   const cerrarProyecto = (p) => {
-    const rows = [];
+    const rowsDet = [];
     registros.forEach(reg => {
       reg.items.forEach(it => {
         if(it.pid===p.id){
           const e = empleados.find(x=>x.id===reg.eid);
-          if(e) rows.push({h:it.h, costo:it.h*e.tarifa});
+          if(e){
+            const llenador = empleados.find(x=>x.id===reg.llenadorId);
+            rowsDet.push({
+              nombre:e.nombre,
+              horas:it.h,
+              costo:it.h*e.tarifa,
+              porTercero:reg.llenadorId!==reg.eid,
+              llenador:llenador?llenador.nombre:null,
+            });
+          }
         }
       });
     });
-    const gastoReal = rows.reduce((a,b)=>a+b.costo,0);
-    const horas     = rows.reduce((a,b)=>a+b.h,0);
+    const gastoReal = rowsDet.reduce((a,b)=>a+b.costo,0);
+    const horas     = rowsDet.reduce((a,b)=>a+b.horas,0);
     const mes = new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
     const cerradoEn = mes.charAt(0).toUpperCase()+mes.slice(1);
-    setProyectos(prev=>prev.map(x=>x.id===p.id?{...x,activo:false,cerradoEn,gastoReal,horas}:x));
+    const closedAt = Date.now();
+    setProyectos(prev=>prev.map(x=>x.id===p.id?{...x,activo:false,cerradoEn,gastoReal,horas,trabajadoresSnap:rowsDet,closedAt}:x));
   };
 
   // Reabrir: solo vuelve activo:true, borra snapshot
@@ -634,9 +692,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         })}
       </>}
 
-      <button style={{background:"none",border:`1px dashed ${C.border}`,borderRadius:10,padding:"12px",color:C.muted,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontFamily:"inherit"}}>
-        ⬇️ Exportar reporte semanal
-      </button>
+      {/* Botón de exportar eliminado según requerimiento */}
     </div>}
 
     {/* ── TAB PROYECTOS ── */}
@@ -695,11 +751,34 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                   </span>
                 </div>
               </div>
-              <button onClick={()=>restaurar(item)} style={{background:C.green+"11",border:`1px solid ${C.green}44`,borderRadius:8,padding:"6px 12px",color:C.green,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>↩️ Restaurar</button>
+              <div style={{display:"flex",gap:8,flexShrink:0}}>
+                <button
+                  onClick={()=>restaurar(item)}
+                  style={{background:C.green+"11",border:`1px solid ${C.green}44`,borderRadius:8,padding:"6px 12px",color:C.green,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}
+                >
+                  ↩️ Restaurar
+                </button>
+                <button
+                  onClick={()=>setDelPerm1(item)}
+                  style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:8,padding:"6px 12px",color:C.red,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}
+                >
+                  🗑️ Borrar
+                </button>
+              </div>
             </div>
           </div>;
         })}
       </>}
+      {delPerm1&&<Confirm
+        msg={`¿Borrar permanentemente "${delPerm1.nombre}" de la papelera?`}
+        onOk={()=>{setDelPerm2(delPerm1);setDelPerm1(null);}}
+        onCancel={()=>setDelPerm1(null)}
+      />}
+      {delPerm2&&<Confirm
+        msg={`Esta acción es IRREVERSIBLE.\nSe eliminará "${delPerm2.nombre}" y sus registros asociados.`}
+        onOk={()=>{setPapelera(prev=>prev.filter(x=>x.id!==delPerm2.id));setDelPerm2(null);}}
+        onCancel={()=>setDelPerm2(null)}
+      />}
     </div>}
 
     {/* ── TAB EMPLEADOS ── */}
@@ -751,7 +830,19 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
     {/* ── TAB CIERRE MENSUAL ── */}
     {tab==="cierre"&&(()=>{
-      const cerrados = proyectos.filter(p=>!p.activo);
+      const DIAS_CIERRE = 60;
+      const ahoraCierre = Date.now();
+      const cerradosRaw = proyectos.filter(p=>!p.activo);
+      const cerrados = cerradosRaw.filter(p=>{
+        if(!p.closedAt) return true;
+        return (ahoraCierre - p.closedAt) < DIAS_CIERRE * 864e5;
+      });
+      if(cerrados.length !== cerradosRaw.length){
+        setProyectos(prev=>{
+          const vigentesIds = new Set(cerrados.map(c=>c.id));
+          return prev.filter(p=>p.activo || vigentesIds.has(p.id));
+        });
+      }
       return <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px"}}>
           <div style={{fontSize:12,color:C.muted,lineHeight:1.6}}>
@@ -767,6 +858,9 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           const over  = pct>100;
           const col   = over?C.red:pct>=95?C.accent:C.green;
           const diff  = gasto - item.presupuesto;
+          const diasRestantes = item.closedAt
+            ? Math.max(0, DIAS_CIERRE - Math.floor((ahoraCierre - item.closedAt)/864e5))
+            : null;
           return <div key={item.id} style={{background:C.surface,border:`1px solid ${over?C.red+"44":C.border}`,borderRadius:12,overflow:"hidden"}}>
             <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.border}`,background:over?C.red+"08":"transparent"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
@@ -775,6 +869,9 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                   <div style={{fontSize:11,color:C.muted,marginTop:3}}>
                     {item.cerradoEn?"Cerrado: "+item.cerradoEn+" · ":""}
                     {item.horas?""+item.horas+"h trabajadas":"Sin registros"}
+                    {typeof diasRestantes==="number" && (
+                      <span>{` · ${diasRestantes} días restantes`}</span>
+                    )}
                   </div>
                 </div>
                 <span style={{background:col+"22",color:col,border:`1px solid ${col}44`,borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{pct}%</span>
@@ -793,6 +890,32 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                 <div style={{fontSize:16,fontWeight:800,color:over?C.red:C.green}}>{$$(gasto)}</div>
               </div>
             </div>
+            {Array.isArray(item.trabajadoresSnap) && item.trabajadoresSnap.length>0 && (
+              <div style={{borderTop:`1px solid ${C.border}`,padding:"8px 14px"}}>
+                <div style={{fontSize:11,color:C.muted,letterSpacing:1,textTransform:"uppercase",fontWeight:700,marginBottom:6}}>
+                  Desglose por trabajador
+                </div>
+                {item.trabajadoresSnap.map((row,idx)=>(
+                  <div key={idx} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:24,height:24,borderRadius:"50%",background:C.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.accent,fontWeight:700,flexShrink:0}}>
+                        {row.nombre?.[0]||"?"}
+                      </div>
+                      <div>
+                        <div style={{fontSize:12,color:C.muted}}>{row.nombre}</div>
+                        {row.porTercero && row.llenador && (
+                          <div style={{fontSize:10,color:C.red}}>👤 por {row.llenador}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.text}}>{formatHoras(row.horas)}</div>
+                      <div style={{fontSize:10,color:C.muted}}>{$$(row.costo)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             <div style={{padding:"8px 14px",borderTop:`1px solid ${C.border}`,background:over?C.red+"08":C.green+"08",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <span style={{fontSize:11,color:C.muted,fontWeight:700}}>{over?"SOBRECOSTO":"AHORRO"} </span>
