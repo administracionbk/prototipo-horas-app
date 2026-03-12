@@ -243,7 +243,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
   const regExist   = target ? registros.find(r => r.eid === target.id) : null;
   const totalH     = Object.values(horas).reduce((a,b) => a + (Number(b)||0), 0);
   const canSend    = selec.length > 0 && selec.every(id => (Number(horas[id])||0) > 0);
-  const tieneProgreso = step==="s3" && (selec.length>0 || Object.values(horas).some(h => (Number(h)||0) > 0));
+  const tieneProgreso = step==="s3" && selec.length>0;
   const [confirmExit,setConfirmExit] = useState(false);
 
   function elegirLlenador(e){ setLlenador(e); setStep("s2"); }
@@ -581,7 +581,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
   // ── corrección
   const abrirCorr = eid => {
-    const reg=registros.find(r=>r.eid===eid);
+    const reg=registros.find(r=>r.eid===eid && r.fecha===hoy());
     const ids=reg?.items.map(x=>x.pid)||[];
     const hrs={};reg?.items.forEach(x=>{hrs[x.pid]=x.h;});
     setCSelec(ids);setCHoras(hrs);setMcorr(eid);
@@ -589,19 +589,19 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const guardarCorr = () => {
     const items=cSelec.map(id=>({pid:id,h:Number(cHoras[id])||0}));
     setRegistros(prev=>{
-      if(prev.find(r=>r.eid===mcorr)) return prev.map(r=>r.eid===mcorr?{...r,items}:r);
-      return [...prev,{eid:mcorr,llenadorId:mcorr,items}];
+      if(prev.find(r=>r.eid===mcorr && r.fecha===hoy()))
+        return prev.map(r=> (r.eid===mcorr && r.fecha===hoy()) ? {...r,items} : r);
+      return [...prev,{eid:mcorr,llenadorId:mcorr,fecha:hoy(),items}];
     });
     setMcorr(null);
   };
 
   // ── cálculos
-  const activos=empleados.filter(e=>e.activo);
-  const pendientes=activos.filter(e=>!registros.find(r=>r.eid===e.id));
-  const proxies=registros.filter(r=>r.llenadorId!==r.eid);
-
   const [vistaReporte,setVistaReporte] = useState("hoy"); // "hoy" | "acumulado"
   const hoyStr = hoy();
+  const activos=empleados.filter(e=>e.activo);
+  const pendientes=activos.filter(e=>!registros.find(r=>r.eid===e.id && r.fecha===hoyStr));
+  const proxies=registros.filter(r=>r.llenadorId!==r.eid && r.fecha===hoyStr);
   const registrosHoy = registros.filter(r=>r.fecha===hoyStr);
   const registrosFuente = vistaReporte==="hoy" ? registrosHoy : registros;
 
@@ -750,7 +750,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
       {/* Correcciones */}
       {(()=>{
-        const conRegistros = activos.filter(e=>registros.find(r=>r.eid===e.id));
+        const conRegistros = activos.filter(e=>registros.find(r=>r.eid===e.id && r.fecha===hoy()));
         if(conRegistros.length===0) return null;
         return (
           <>
@@ -887,7 +887,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         <Btn onClick={()=>{setFemp({nombre:"",activo:true,tarifa:""});setMemp("nuevo");}}>+ Agregar</Btn>
       </div>
       {empleados.map(e=>{
-        const reg=registros.find(r=>r.eid===e.id);
+        const reg=registros.find(r=>r.eid===e.id && r.fecha===hoy());
         const hDia=reg?reg.items.reduce((a,x)=>a+x.h,0):0;
         const porTercero=reg&&reg.llenadorId!==reg.eid;
         const llenador=porTercero?empleados.find(x=>x.id===reg.llenadorId):null;
@@ -1127,7 +1127,11 @@ export default function App(){
         for(const row of empExist || []) {
           if(!empIds.has(row.id)) await supabase.from("empleados").delete().eq("id", row.id);
         }
-        await supabase.from("registros").upsert(registros.map(r=>({eid:r.eid,llenador_id:r.llenadorId,fecha:hoy(),items:r.items})),{onConflict:"eid,fecha"});
+        const registrosHoySync = registros.filter(r => r.fecha === hoy());
+        await supabase.from("registros").upsert(
+          registrosHoySync.map(r => ({eid:r.eid,llenador_id:r.llenadorId,fecha:r.fecha,items:r.items})),
+          {onConflict:"eid,fecha"}
+        );
         if(papelera.length===0){
           const { data: paAll }=await supabase.from("papelera").select("id");
           for(const row of paAll||[]) await supabase.from("papelera").delete().eq("id",row.id);
