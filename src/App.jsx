@@ -343,7 +343,13 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
                   <span>{e.nombre}</span>
                   {esTuyo && <span style={{fontSize:11,color:C.accent,fontWeight:700,marginLeft:6}}>{"(Tú)"}</span>}
                 </div>
-                {yaReg ? <Badge label="Registrado" color={C.green}/> : <span style={{color:C.accent}}>{"→"}</span>}
+                {yaReg ? (() => {
+                  const totalHReg = yaReg.items.reduce((a, x) => a + (Number(x.h)||0), 0);
+                  const completo = totalHReg >= 8;
+                  if(completo) return <Badge label="✓ 8h" color={C.green}/>;
+                  const faltan = 8 - totalHReg;
+                  return <Badge label={`Faltan ${formatHoras(faltan)}`} color={C.orange}/>;
+                })() : <span style={{color:C.accent}}>{"→"}</span>}
               </button>
             );
           })}
@@ -373,6 +379,18 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
           </div>
           <div style={{fontSize:13,color:C.muted,textAlign:"center"}}>{"¿Necesitas corregir algo?"}</div>
           <Btn onClick={iniciarEdicion} variant="ghost" full>{"✏️ Editar registro"}</Btn>
+          <Btn
+            onClick={() => {
+              setSelec([]);
+              setHoras({});
+              setEditando(true);
+              setStep("s3");
+            }}
+            variant="warn"
+            full
+          >
+            🔄 Corregir desde cero
+          </Btn>
           <Btn onClick={onBack} variant="secondary" full>{"Todo está bien, salir"}</Btn>
         </div>
       )}
@@ -527,6 +545,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           if(e){
             const llenador = empleados.find(x=>x.id===reg.llenadorId);
             rowsDet.push({
+              eid:reg.eid,
               nombre:e.nombre,
               horas:it.h,
               costo:it.h*e.tarifa,
@@ -538,9 +557,9 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       });
     });
     const rowsAgrupadas = Object.values(rowsDet.reduce((acc, row) => {
-      if(!acc[row.nombre]) acc[row.nombre] = {...row, horas: 0, costo: 0};
-      acc[row.nombre].horas += row.horas;
-      acc[row.nombre].costo += row.costo;
+      if(!acc[row.eid]) acc[row.eid] = {...row, horas: 0, costo: 0};
+      acc[row.eid].horas += row.horas;
+      acc[row.eid].costo += row.costo;
       return acc;
     }, {}));
     const gastoReal = rowsAgrupadas.reduce((a,b) => a+b.costo, 0);
@@ -872,7 +891,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:600,color:C.text}}>{item.nombre}</div>
-                <div style={{fontSize:11,color:C.muted,marginTop:3}}>Presupuesto: {$$(item.presupuesto)} · {totalH}h registradas</div>
+              <div style={{fontSize:11,color:C.muted,marginTop:3}}>Presupuesto: {$$(item.presupuesto)} · {formatHoras(totalH)} registradas</div>
                 <div style={{marginTop:4}}>
                   <span style={{background:urgente?C.red+"22":C.orange+"22",color:urgente?C.red:C.orange,border:`1px solid ${urgente?C.red+"44":C.orange+"44"}`,borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:700}}>
                     {urgente?"⚠️ ":"⏳ "}{diasRestantes} días restantes
@@ -1210,6 +1229,9 @@ export default function App(){
 
   const guardarRegistro=(eid,llenadorId,items)=>setRegistros(prev=>{
     const hoyStr = hoy();
+    if(items.length === 0) {
+      return prev.filter(r => !(r.eid===eid && r.fecha===hoyStr));
+    }
     if(prev.find(r=>r.eid===eid && r.fecha===hoyStr))
       return prev.map(r=> (r.eid===eid && r.fecha===hoyStr)?{...r,llenadorId,items}:r);
     return [...prev,{eid,llenadorId,items,fecha:hoyStr}];
