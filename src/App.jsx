@@ -75,14 +75,14 @@ function Sheet({title,onClose,children}){
   </div>;
 }
 
-function Confirm({msg,onOk,onCancel}){
+function Confirm({msg,onOk,onCancel,okLabel="Eliminar"}){
   return <div style={{position:"fixed",inset:0,background:"#000d",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:24}}>
     <div style={{background:C.surface,border:`1px solid ${C.red}44`,borderRadius:16,padding:24,width:"100%",maxWidth:300}}>
       <div style={{fontSize:28,textAlign:"center",marginBottom:10}}>⚠️</div>
       <div style={{fontSize:14,color:C.text,textAlign:"center",marginBottom:20,lineHeight:1.5}}>{msg}</div>
       <div style={{display:"flex",gap:10}}>
         <Btn onClick={onCancel} variant="secondary" full>Cancelar</Btn>
-        <Btn onClick={onOk} variant="danger" full>Eliminar</Btn>
+        <Btn onClick={onOk} variant="danger" full>{okLabel}</Btn>
       </div>
     </div>
   </div>;
@@ -240,7 +240,9 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
   const [editando,setEditando] = useState(false);
 
   const esMismo    = llenador && target && llenador.id === target.id;
-  const regExist   = target ? registros.find(r => r.eid === target.id && r.fecha === hoy()) : null;
+  const regExist   = target
+    ? registros.find(r => r.eid === target.id && r.fecha === hoy() && r.items?.some(it => (Number(it.h)||0) > 0))
+    : null;
   const totalH     = Object.values(horas).reduce((a,b) => a + (Number(b)||0), 0);
   const canSend    = selec.length > 0 && selec.every(id => (Number(horas[id])||0) > 0);
   const tieneProgreso = step==="s3" && selec.length>0;
@@ -251,7 +253,8 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
   function elegirTarget(e){
     setTarget(e);
     const reg = registros.find(r => r.eid === e.id && r.fecha === hoy());
-    if(reg){ setStep("s2b"); }
+    const tieneHoras = reg && reg.items && reg.items.some(it => (Number(it.h)||0) > 0);
+    if(tieneHoras){ setStep("s2b"); }
     else { setSelec([]); setHoras({}); setEditando(false); setStep("s3"); }
   }
 
@@ -330,7 +333,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
             {"👋 Hola, "}<strong>{llenador ? llenador.nombre : ""}</strong>{". Selecciona de quién registrarás las horas:"}
           </div>
           {empleados.filter(e=>e.activo).map(e => {
-            const yaReg  = registros.find(r => r.eid === e.id && r.fecha === hoy());
+            const yaReg  = registros.find(r => r.eid === e.id && r.fecha === hoy() && r.items?.some(it => (Number(it.h)||0) > 0));
             const esTuyo = llenador && e.id === llenador.id;
             return (
               <button key={e.id} onClick={()=>elegirTarget(e)}
@@ -363,7 +366,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
               return (
                 <div key={x.pid} style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.muted,padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
                   <span>{p ? p.nombre : "—"}</span>
-                  <span style={{color:C.text,fontWeight:700}}>{x.h}h</span>
+                  <span style={{color:C.text,fontWeight:700}}>{formatHoras(x.h)}</span>
                 </div>
               );
             })}
@@ -411,13 +414,13 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
               return (
                 <div key={id} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
                   <span style={{color:C.muted}}>{p ? p.nombre : "—"}</span>
-                  <span style={{color:C.text,fontWeight:700}}>{horas[id]}h</span>
+                  <span style={{color:C.text,fontWeight:700}}>{formatHoras(horas[id])}</span>
                 </div>
               );
             })}
             <div style={{display:"flex",justifyContent:"space-between",paddingTop:8}}>
               <span style={{color:C.muted,fontWeight:700}}>Total</span>
-              <span style={{color:C.accent,fontWeight:900,fontSize:15}}>{totalH}h</span>
+              <span style={{color:C.accent,fontWeight:900,fontSize:15}}>{formatHoras(totalH)}</span>
             </div>
           </div>
           <Btn onClick={()=>{
@@ -436,6 +439,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
       {confirmExit && (
         <Confirm
           msg="¿Salir? Perderás el registro que estás llenando"
+          okLabel="Salir"
           onOk={()=>{
             setConfirmExit(false);
             limpiarFlujo();
@@ -465,6 +469,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   // Papelera - borrado permanente
   const [delPerm1,setDelPerm1]=useState(null);
   const [delPerm2,setDelPerm2]=useState(null);
+  const [confirmReabrir,setConfirmReabrir]=useState(null);
   const [errPresupuesto,setErrPresupuesto]=useState("");
   const [errTarifa,setErrTarifa]=useState("");
 
@@ -487,7 +492,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     const ahora = Date.now();
     const papeleraVigente = papelera.filter(x => ahora - x.deletedAt < DIAS * 864e5);
     if(papeleraVigente.length !== papelera.length) setPapelera(papeleraVigente);
-  },[papelera.length]);
+  },[papelera]);
 
   // Mover proyecto a papelera (guarda snapshot de sus registros)
   const moverAPapelera = (p) => {
@@ -532,15 +537,21 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         }
       });
     });
-    const gastoReal = rowsDet.reduce((a,b)=>a+b.costo,0);
-    const horas     = rowsDet.reduce((a,b)=>a+b.horas,0);
+    const rowsAgrupadas = Object.values(rowsDet.reduce((acc, row) => {
+      if(!acc[row.nombre]) acc[row.nombre] = {...row, horas: 0, costo: 0};
+      acc[row.nombre].horas += row.horas;
+      acc[row.nombre].costo += row.costo;
+      return acc;
+    }, {}));
+    const gastoReal = rowsAgrupadas.reduce((a,b) => a+b.costo, 0);
+    const horas     = rowsAgrupadas.reduce((a,b) => a+b.horas, 0);
     const mes = new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
     const cerradoEn = mes.charAt(0).toUpperCase()+mes.slice(1);
     const closedAt = Date.now();
     setProyectos(prev=>prev.map(x=>{
       if(x.id!==p.id) return x;
       const prevHist = Array.isArray(x.trabajadoresSnap)?x.trabajadoresSnap:[];
-      const trabajadoresSnap = [...prevHist,...rowsDet];
+      const trabajadoresSnap = [...prevHist,...rowsAgrupadas];
       return {...x,activo:false,cerradoEn,gastoReal,horas,trabajadoresSnap,closedAt};
     }));
   };
@@ -591,7 +602,9 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setCSelec(ids);setCHoras(hrs);setMcorr(eid);
   };
   const guardarCorr = () => {
-    const items = cSelec.map(id => ({pid:id, h:Number(cHoras[id])||0}));
+    const items = cSelec
+      .map(id => ({pid:id, h:Number(cHoras[id])||0}))
+      .filter(it => it.h > 0);
     setRegistros(prev => {
       const existe = prev.find(r => r.eid===mcorr && r.fecha===hoy());
       if(items.length === 0) {
@@ -609,8 +622,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const [vistaReporte,setVistaReporte] = useState("hoy");
   const hoyStr = hoy();
   const activos=empleados.filter(e=>e.activo);
-  const pendientes=activos.filter(e=>!registros.find(r=>r.eid===e.id && r.fecha===hoyStr));
-  const proxies=registros.filter(r=>r.llenadorId!==r.eid && r.fecha===hoyStr);
+  const pendientes=activos.filter(e=>!registros.find(r=>r.eid===e.id && r.fecha===hoyStr && r.items?.some(it=>(Number(it.h)||0)>0)));
+  const proxies=registros.filter(r=>r.llenadorId!==r.eid && r.fecha===hoyStr && r.items?.some(it=>(Number(it.h)||0)>0));
   const registrosVista = vistaReporte === "hoy"
     ? registros.filter(r => r.fecha === hoyStr)
     : registros;
@@ -705,7 +718,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         {[
-          {l:vistaReporte==="hoy"?"Horas registradas":"Total horas",v:`${totalHorasDia}h`,c:C.accent},
+          {l:vistaReporte==="hoy"?"Horas registradas":"Total horas",v:formatHoras(totalHorasDia),c:C.accent},
           {l:vistaReporte==="hoy"?"Costo M.O. hoy":"Costo M.O. total",v:$$(totalCostoDia),c:C.accent},
           {l:"Proyectos activos",v:String(proyectos.filter(p=>p.activo).length),c:C.green},
           {l:"Sin registrar",v:String(pendientes.length),c:pendientes.length>0?C.orange:C.green},
@@ -734,7 +747,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:700,color:C.text}}>{item.nombre}</div>
-                <div style={{fontSize:11,color:C.muted,marginTop:2}}>{item.totalH}h · <span style={{color:C.accent}}>{$$(item.totalC)}</span> de <span style={{color:C.muted}}>{$$(item.presupuesto)}</span> presupuestados</div>
+                <div style={{fontSize:11,color:C.muted,marginTop:2}}>{formatHoras(item.totalH)} · <span style={{color:C.accent}}>{$$(item.totalC)}</span> de <span style={{color:C.muted}}>{$$(item.presupuesto)}</span> presupuestados</div>
               </div>
               <Badge label={`${item.pct}%`} color={col}/>
             </div>
@@ -753,23 +766,25 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                   </div>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:12,fontWeight:700,color:C.text}}>{h}h</div>
+                  <div style={{fontSize:12,fontWeight:700,color:C.text}}>{formatHoras(h)}</div>
                   <div style={{fontSize:10,color:C.muted}}>{$$(costo)}</div>
                 </div>
               </div>
             </div>)
-            :<div style={{padding:"10px 14px",fontSize:12,color:C.muted,fontStyle:"italic"}}>Sin registros hoy</div>
+            :<div style={{padding:"10px 14px",fontSize:12,color:C.muted,fontStyle:"italic"}}>
+              Sin registros {vistaReporte === "hoy" ? "hoy" : "acumulados"}
+            </div>
           }
           <div style={{padding:"8px 14px",background:over?C.red+"11":C.accent+"08",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span style={{fontSize:11,color:C.muted,fontWeight:700}}>{vistaReporte==="hoy"?"TOTAL HOY":"TOTAL ACUMULADO"}</span>
-            <span style={{fontSize:13,fontWeight:900,color:col}}>{item.totalH}h <span style={{fontSize:11,color:C.muted,fontWeight:400}}>{$$(item.totalC)}</span></span>
+            <span style={{fontSize:13,fontWeight:900,color:col}}>{formatHoras(item.totalH)} <span style={{fontSize:11,color:C.muted,fontWeight:400}}>{$$(item.totalC)}</span></span>
           </div>
         </div>;
       })}
 
       {/* Correcciones */}
       {(()=>{
-        const conRegistros = activos.filter(e=>registros.find(r=>r.eid===e.id && r.fecha===hoy()));
+        const conRegistros = activos.filter(e=>registros.find(r=>r.eid===e.id && r.fecha===hoy() && r.items?.some(it=>(Number(it.h)||0)>0)));
         if(conRegistros.length===0) return null;
         return (
           <>
@@ -841,7 +856,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           </div>
         </div>
       </Sheet>}
-      {delProy&&<Confirm msg={`¿Mover "${delProy.nombre}" a la papelera? Tendrás 30 días para recuperarlo.`} onOk={()=>moverAPapelera(delProy)} onCancel={()=>setDelProy(null)}/>}
+      {delProy&&<Confirm msg={`¿Mover "${delProy.nombre}" a la papelera? Tendrás 30 días para recuperarlo.`} okLabel="Mover a papelera" onOk={()=>moverAPapelera(delProy)} onCancel={()=>setDelProy(null)}/>}
 
       {/* ── PAPELERA ── */}
       {papeleraVigente.length>0&&<>
@@ -894,6 +909,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       />}
       {confirmCerrar&&<Confirm
         msg={`Este proyecto no tiene horas registradas. ¿Seguro que quieres cerrarlo?`}
+        okLabel="Cerrar"
         onOk={()=>{cerrarProyecto(confirmCerrar);setConfirmCerrar(null);}}
         onCancel={()=>setConfirmCerrar(null)}
       />}
@@ -906,7 +922,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         <Btn onClick={()=>{setFemp({nombre:"",activo:true,tarifa:""});setMemp("nuevo");}}>+ Agregar</Btn>
       </div>
       {empleados.map(e=>{
-        const reg=registros.find(r=>r.eid===e.id && r.fecha===hoy());
+        const reg=registros.find(r=>r.eid===e.id && r.fecha===hoy() && r.items?.some(it=>(Number(it.h)||0)>0));
         const hDia=reg?reg.items.reduce((a,x)=>a+x.h,0):0;
         const porTercero=reg&&reg.llenadorId!==reg.eid;
         const llenador=porTercero?empleados.find(x=>x.id===reg.llenadorId):null;
@@ -918,7 +934,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
               <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,flexWrap:"wrap"}}>
                 <Badge label={e.activo?"Activo":"Inactivo"} color={e.activo?C.green:C.muted}/>
                 <span style={{fontSize:11,color:C.muted}}>{$$(e.tarifa)}/h</span>
-                {e.activo&&reg&&<span style={{fontSize:11,color:C.muted}}>· {hDia}h hoy</span>}
+                {e.activo&&reg&&<span style={{fontSize:11,color:C.muted}}>· {formatHoras(hDia)} hoy</span>}
                 {porTercero&&<Badge label={`👤 por ${llenador?.nombre}`} color={C.red}/>}
               </div>
             </div>
@@ -987,7 +1003,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                   <div style={{fontSize:13,fontWeight:700,color:C.text}}>{item.nombre}</div>
                   <div style={{fontSize:11,color:C.muted,marginTop:3}}>
                     {item.cerradoEn?"Cerrado: "+item.cerradoEn+" · ":""}
-                    {item.horas?""+item.horas+"h trabajadas":"Sin registros"}
+                    {item.horas ? formatHoras(item.horas)+" trabajadas" : "Sin registros"}
                     {typeof diasRestantes==="number" && (
                       <span>{` · ${diasRestantes} días restantes`}</span>
                     )}
@@ -1040,7 +1056,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                 <span style={{fontSize:11,color:C.muted,fontWeight:700}}>{over?"SOBRECOSTO":"AHORRO"} </span>
                 <span style={{fontSize:13,fontWeight:900,color:over?C.red:C.green}}>{over?"+":"-"}{$$(Math.abs(diff))}</span>
               </div>
-              <button onClick={()=>reabrirProyecto(item)} style={{background:C.green+"11",border:`1px solid ${C.green}44`,borderRadius:6,padding:"5px 12px",color:C.green,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🔓 Reabrir</button>
+              <button onClick={()=>setConfirmReabrir(item)} style={{background:C.green+"11",border:`1px solid ${C.green}44`,borderRadius:6,padding:"5px 12px",color:C.green,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>🔓 Reabrir</button>
             </div>
           </div>;
         })}
@@ -1055,7 +1071,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
               const over   = totalG>totalP;
               return [
                 {l:"Proyectos",v:String(cerrados.length),c:C.accent},
-                {l:"Horas totales",v:`${totalH}h`,c:C.text},
+                {l:"Horas totales",v:formatHoras(totalH),c:C.text},
                 {l:"Desviación",v:(over?"+":"-")+$$(Math.abs(totalG-totalP)),c:over?C.red:C.green},
               ].map(k=><div key={k.l} style={{textAlign:"center"}}>
                 <div style={{fontSize:16,fontWeight:900,color:k.c}}>{k.v}</div>
@@ -1064,6 +1080,12 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
             })()}
           </div>
         </div>}
+        {confirmReabrir && <Confirm
+          msg={`¿Reabrir "${confirmReabrir.nombre}"? Se perderá el resumen de gasto guardado.`}
+          okLabel="Reabrir"
+          onOk={() => { reabrirProyecto(confirmReabrir); setConfirmReabrir(null); }}
+          onCancel={() => setConfirmReabrir(null)}
+        />}
       </div>;
     })()}
 
@@ -1097,9 +1119,7 @@ export default function App(){
   const [proyectos,setProyectos]=useState([]);
   const [empleados,setEmpleados]=useState([]);
   const [registros,setRegistros]=useState([]);
-  const [papelera,setPapelera]=useState(supabase?[]:[
-    {id:901,nombre:"Casas Infonavit Sector 3",activo:false,presupuesto:22000,deletedAt:Date.now()-5*864e5,registrosSnap:[{eid:2,llenadorId:2,items:[{pid:901,h:6}]},{eid:5,llenadorId:5,items:[{pid:901,h:8}]}]},
-  ]);
+  const [papelera,setPapelera]=useState([]);
   const [saving,setSaving]=useState(false);
   const [saveError,setSaveError]=useState("");
   const isFirstSync = useRef(true);
@@ -1148,11 +1168,27 @@ export default function App(){
         for(const row of empExist || []) {
           if(!empIds.has(row.id)) await supabase.from("empleados").delete().eq("id", row.id);
         }
+        // Eliminar registros históricos de empleados que ya no existen
+        const { data: todosLosRegs } = await supabase.from("registros").select("eid");
+        const empIdsActuales = new Set(empleados.map(e => e.id));
+        for(const row of todosLosRegs || []) {
+          if(!empIdsActuales.has(row.eid)) {
+            await supabase.from("registros").delete().eq("eid", row.eid);
+          }
+        }
         const registrosHoySync = registros.filter(r => r.fecha === hoy());
         await supabase.from("registros").upsert(
           registrosHoySync.map(r => ({eid:r.eid,llenador_id:r.llenadorId,fecha:r.fecha,items:r.items})),
           {onConflict:"eid,fecha"}
         );
+        // Eliminar registros de hoy que ya no están en el state
+        const { data: regHoyExist } = await supabase.from("registros").select("eid,fecha").eq("fecha", hoy());
+        const eidsEnState = new Set(registrosHoySync.map(r => r.eid));
+        for(const row of regHoyExist || []) {
+          if(!eidsEnState.has(row.eid)) {
+            await supabase.from("registros").delete().eq("eid", row.eid).eq("fecha", hoy());
+          }
+        }
         if(papelera.length===0){
           const { data: paAll }=await supabase.from("papelera").select("id");
           for(const row of paAll||[]) await supabase.from("papelera").delete().eq("id",row.id);
@@ -1184,8 +1220,8 @@ export default function App(){
     else setScreen(role);
   };
 
-  const pendientes=empleados.filter(e=>e.activo&&!registros.find(r=>r.eid===e.id && r.fecha===hoy()));
-  const proxies=registros.filter(r=>r.llenadorId!==r.eid && r.fecha===hoy());
+  const pendientes=empleados.filter(e=>e.activo&&!registros.find(r=>r.eid===e.id && r.fecha===hoy() && r.items?.some(it=>(Number(it.h)||0)>0)));
+  const proxies=registros.filter(r=>r.llenadorId!==r.eid && r.fecha===hoy() && r.items?.some(it=>(Number(it.h)||0)>0));
 
   if(loading) return <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Segoe UI',sans-serif",color:"#777"}}><div>Cargando...</div></div>;
 
