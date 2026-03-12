@@ -250,7 +250,8 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
 
   function elegirTarget(e){
     setTarget(e);
-    const reg = registros.find(r => r.eid === e.id);
+    const hoyStr = hoy();
+    const reg = registros.find(r => r.eid === e.id && r.fecha === hoyStr);
     if(reg){ setStep("s2b"); }
     else { setSelec([]); setHoras({}); setEditando(false); setStep("s3"); }
   }
@@ -330,7 +331,8 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
             {"👋 Hola, "}<strong>{llenador ? llenador.nombre : ""}</strong>{". Selecciona de quién registrarás las horas:"}
           </div>
           {empleados.filter(e=>e.activo).map(e => {
-            const yaReg  = registros.find(r => r.eid === e.id);
+            const hoyStr = hoy();
+            const yaReg  = registros.find(r => r.eid === e.id && r.fecha === hoyStr);
             const esTuyo = llenador && e.id === llenador.id;
             return (
               <button key={e.id} onClick={()=>elegirTarget(e)}
@@ -600,9 +602,14 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const pendientes=activos.filter(e=>!registros.find(r=>r.eid===e.id));
   const proxies=registros.filter(r=>r.llenadorId!==r.eid);
 
+  const [vistaReporte,setVistaReporte] = useState("hoy"); // "hoy" | "acumulado"
+  const hoyStr = hoy();
+  const registrosHoy = registros.filter(r=>r.fecha===hoyStr);
+  const registrosFuente = vistaReporte==="hoy" ? registrosHoy : registros;
+
   const reporte=proyectos.filter(p=>p.activo).map(p=>{
     const rows=[];
-    registros.forEach(reg=>{
+    registrosFuente.forEach(reg=>{
       reg.items.forEach(it=>{
         if(it.pid===p.id){
           const e=empleados.find(x=>x.id===reg.eid);
@@ -616,8 +623,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     return{...p,rows,totalH,totalC,pct};
   });
 
-  const totalHorasDia=registros.reduce((a,r)=>a+r.items.reduce((b,x)=>b+x.h,0),0);
-  const totalCostoDia=registros.reduce((a,r)=>{
+  const totalHorasDia=registrosFuente.reduce((a,r)=>a+r.items.reduce((b,x)=>b+x.h,0),0);
+  const totalCostoDia=registrosFuente.reduce((a,r)=>{
     const e=empleados.find(x=>x.id===r.eid);
     return a+r.items.reduce((b,x)=>b+(x.h*(e?.tarifa||0)),0);
   },0);
@@ -681,8 +688,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       {/* KPIs */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         {[
-          {l:"Horas registradas",v:`${totalHorasDia}h`,c:C.accent},
-          {l:"Costo M.O. hoy",v:$$(totalCostoDia),c:C.accent},
+          {l:vistaReporte==="hoy"?"Horas registradas":"Total horas",v:`${totalHorasDia}h`,c:C.accent},
+          {l:vistaReporte==="hoy"?"Costo M.O. hoy":"Costo M.O. total",v:$$(totalCostoDia),c:C.accent},
           {l:"Proyectos activos",v:String(proyectos.filter(p=>p.activo).length),c:C.green},
           {l:"Sin registrar",v:String(pendientes.length),c:pendientes.length>0?C.orange:C.green},
         ].map(k=><div key={k.l} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
@@ -691,7 +698,16 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         </div>)}
       </div>
 
-      <div style={{fontSize:11,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontWeight:700}}>Desglose por proyecto</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
+        <div style={{fontSize:11,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontWeight:700}}>Desglose por proyecto</div>
+        <div style={{width:190}}>
+          <Toggle
+            value={vistaReporte}
+            onChange={v=>setVistaReporte(v)}
+            opts={[{v:"hoy",l:"Hoy"},{v:"acumulado",l:"Acumulado"}]}
+          />
+        </div>
+      </div>
 
       {reporte.map(item=>{
         const over=item.pct>100,warn=item.pct>80&&!over;
@@ -1052,7 +1068,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 // ── HELPERS SUPABASE (mapeo DB ↔ app) ─────────────────────────
 function fromDbProyecto(r){ return r?{ id:r.id,nombre:r.nombre,activo:r.activo,presupuesto:r.presupuesto,cerradoEn:r.cerrado_en,gastoReal:r.gasto_real,horas:r.horas,closedAt:r.closed_at?new Date(r.closed_at).getTime():null,trabajadoresSnap:r.trabajadores_snap||null }:null; }
 function toDbProyecto(p){ return { id:p.id,nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto,cerrado_en:p.cerradoEn||null,gasto_real:p.gastoReal??null,horas:p.horas??null,closed_at:p.closedAt?new Date(p.closedAt).toISOString():null,trabajadores_snap:p.trabajadoresSnap||null }; }
-function fromDbRegistro(r){ return r?{ eid:r.eid,llenadorId:r.llenador_id,items:r.items||[] }:null; }
+function fromDbRegistro(r){ return r?{ eid:r.eid,llenadorId:r.llenador_id,items:r.items||[] ,fecha:r.fecha}:null; }
 
 // ── ROOT ──────────────────────────────────────────────────────
 export default function App(){
@@ -1077,7 +1093,7 @@ export default function App(){
         const [pr,em,re,pa]=await Promise.all([
           supabase.from("proyectos").select("*").order("nombre"),
           supabase.from("empleados").select("*").order("nombre"),
-          supabase.from("registros").select("*").eq("fecha",hoy()),
+          supabase.from("registros").select("*"),
           supabase.from("papelera").select("*").order("deleted_at",{ascending:false}),
         ]);
         if(pr.data?.length) setProyectos(pr.data.map(fromDbProyecto).filter(Boolean));
@@ -1134,8 +1150,10 @@ export default function App(){
   },[proyectos,empleados,registros,papelera,loading]);
 
   const guardarRegistro=(eid,llenadorId,items)=>setRegistros(prev=>{
-    if(prev.find(r=>r.eid===eid)) return prev.map(r=>r.eid===eid?{...r,llenadorId,items}:r);
-    return [...prev,{eid,llenadorId,items}];
+    const hoyStr = hoy();
+    if(prev.find(r=>r.eid===eid && r.fecha===hoyStr))
+      return prev.map(r=> (r.eid===eid && r.fecha===hoyStr)?{...r,llenadorId,items}:r);
+    return [...prev,{eid,llenadorId,items,fecha:hoyStr}];
   });
 
   const ir=role=>{
