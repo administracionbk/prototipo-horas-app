@@ -591,11 +591,16 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setCSelec(ids);setCHoras(hrs);setMcorr(eid);
   };
   const guardarCorr = () => {
-    const items=cSelec.map(id=>({pid:id,h:Number(cHoras[id])||0}));
-    setRegistros(prev=>{
-      if(prev.find(r=>r.eid===mcorr && r.fecha===hoy()))
-        return prev.map(r=> (r.eid===mcorr && r.fecha===hoy()) ? {...r,items} : r);
-      return [...prev,{eid:mcorr,llenadorId:mcorr,fecha:hoy(),items}];
+    const items = cSelec.map(id => ({pid:id, h:Number(cHoras[id])||0}));
+    setRegistros(prev => {
+      const existe = prev.find(r => r.eid===mcorr && r.fecha===hoy());
+      if(items.length === 0) {
+        // Si no hay items, eliminar el registro si existía
+        return existe ? prev.filter(r => !(r.eid===mcorr && r.fecha===hoy())) : prev;
+      }
+      if(existe)
+        return prev.map(r => (r.eid===mcorr && r.fecha===hoy()) ? {...r, items} : r);
+      return [...prev, {eid:mcorr, llenadorId:mcorr, fecha:hoy(), items}];
     });
     setMcorr(null);
   };
@@ -1069,7 +1074,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         <div style={{display:"flex",gap:8,marginTop:4}}>
           <Btn onClick={()=>setMcorr(null)} variant="secondary" full>Cancelar</Btn>
           <Btn onClick={guardarCorr} full disabled={saving}>
-            {saving ? "Guardando..." : "Guardar"}
+            {saving ? "Guardando..." : cSelec.length > 0 ? "Guardar" : "Limpiar registro"}
           </Btn>
         </div>
       </div>
