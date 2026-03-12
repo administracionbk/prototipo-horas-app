@@ -250,8 +250,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
 
   function elegirTarget(e){
     setTarget(e);
-    const hoyStr = hoy();
-    const reg = registros.find(r => r.eid === e.id && r.fecha === hoyStr);
+    const reg = registros.find(r => r.eid === e.id && r.fecha === hoy());
     if(reg){ setStep("s2b"); }
     else { setSelec([]); setHoras({}); setEditando(false); setStep("s3"); }
   }
@@ -331,8 +330,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
             {"👋 Hola, "}<strong>{llenador ? llenador.nombre : ""}</strong>{". Selecciona de quién registrarás las horas:"}
           </div>
           {empleados.filter(e=>e.activo).map(e => {
-            const hoyStr = hoy();
-            const yaReg  = registros.find(r => r.eid === e.id && r.fecha === hoyStr);
+            const yaReg  = registros.find(r => r.eid === e.id && r.fecha === hoy());
             const esTuyo = llenador && e.id === llenador.id;
             return (
               <button key={e.id} onClick={()=>elegirTarget(e)}
