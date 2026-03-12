@@ -238,6 +238,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
   const [selec,setSelec]       = useState([]);
   const [horas,setHoras]       = useState({});
   const [editando,setEditando] = useState(false);
+  const [origenS3,setOrigenS3] = useState("s2");
 
   const esMismo    = llenador && target && llenador.id === target.id;
   const regExist   = target
@@ -255,14 +256,14 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
     const reg = registros.find(r => r.eid === e.id && r.fecha === hoy());
     const tieneHoras = reg && reg.items && reg.items.some(it => (Number(it.h)||0) > 0);
     if(tieneHoras){ setStep("s2b"); }
-    else { setSelec([]); setHoras({}); setEditando(false); setStep("s3"); }
+    else { setSelec([]); setHoras({}); setEditando(false); setOrigenS3("s2"); setStep("s3"); }
   }
 
   function iniciarEdicion(){
     const ids = regExist.items.map(x => x.pid);
     const hrs = {};
     regExist.items.forEach(x => { hrs[x.pid] = x.h; });
-    setSelec(ids); setHoras(hrs); setEditando(true); setStep("s3");
+    setSelec(ids); setHoras(hrs); setEditando(true); setOrigenS3("s2b"); setStep("s3");
   }
 
   function enviar(){
@@ -288,7 +289,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
     if(step==="s1") onBack();
     else if(step==="s2") setStep("s1");
     else if(step==="s2b") setStep("s2");
-    else if(step==="s3") setStep("s2");
+    else if(step==="s3") setStep(origenS3);
     else { limpiarFlujo(); }
   }
 
@@ -384,6 +385,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
               setSelec([]);
               setHoras({});
               setEditando(true);
+              setOrigenS3("s2b");
               setStep("s3");
             }}
             variant="warn"
@@ -1142,6 +1144,7 @@ export default function App(){
   const [saving,setSaving]=useState(false);
   const [saveError,setSaveError]=useState("");
   const isFirstSync = useRef(true);
+  const isSyncing = useRef(false);
 
   // Cargar datos desde Supabase al montar
   useEffect(()=>{
@@ -1172,6 +1175,8 @@ export default function App(){
         setSaving(false);
         return;
       }
+      if(isSyncing.current) return;
+      isSyncing.current = true;
       setSaving(true);
       setSaveError("");
       try {
@@ -1222,6 +1227,7 @@ export default function App(){
         console.warn("Error guardando en Supabase",e);
         setSaveError("No se pudo guardar. Verifica tu conexión e intenta de nuevo");
       } finally {
+        isSyncing.current = false;
         setSaving(false);
       }
     })();
