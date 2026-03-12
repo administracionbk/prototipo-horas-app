@@ -240,7 +240,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
   const [editando,setEditando] = useState(false);
 
   const esMismo    = llenador && target && llenador.id === target.id;
-  const regExist   = target ? registros.find(r => r.eid === target.id) : null;
+  const regExist   = target ? registros.find(r => r.eid === target.id && r.fecha === hoy()) : null;
   const totalH     = Object.values(horas).reduce((a,b) => a + (Number(b)||0), 0);
   const canSend    = selec.length > 0 && selec.every(id => (Number(horas[id])||0) > 0);
   const tieneProgreso = step==="s3" && selec.length>0;
@@ -504,7 +504,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setRegistros(prev=>{
       let next=[...prev];
       (item.registrosSnap||[]).forEach(snap=>{
-        if(!next.find(r=>r.eid===snap.eid)) next=[...next,snap];
+        if(!next.find(r=>r.eid===snap.eid && r.fecha===(snap.fecha||hoy())))
+          next=[...next,{...snap,fecha:snap.fecha||hoy()}];
       });
       return next;
     });
@@ -544,9 +545,12 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     }));
   };
 
-  // Reabrir: solo vuelve activo:true, conserva historial
+  // Reabrir: solo vuelve activo:true, limpia snapshot acumulado
   const reabrirProyecto = (p) => {
-    setProyectos(prev=>prev.map(x=>x.id===p.id?{...x,activo:true,cerradoEn:null,gastoReal:null,horas:null}:x));
+    setProyectos(prev=>prev.map(x=>x.id===p.id
+      ? {...x,activo:true,cerradoEn:null,gastoReal:null,horas:null,trabajadoresSnap:null}
+      : x
+    ));
   };
 
   // ── proyectos handlers
@@ -597,17 +601,18 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   };
 
   // ── cálculos
-  const [vistaReporte,setVistaReporte] = useState("hoy"); // "hoy" | "acumulado"
+  const [vistaReporte,setVistaReporte] = useState("hoy");
   const hoyStr = hoy();
   const activos=empleados.filter(e=>e.activo);
   const pendientes=activos.filter(e=>!registros.find(r=>r.eid===e.id && r.fecha===hoyStr));
   const proxies=registros.filter(r=>r.llenadorId!==r.eid && r.fecha===hoyStr);
-  const registrosHoy = registros.filter(r=>r.fecha===hoyStr);
-  const registrosFuente = vistaReporte==="hoy" ? registrosHoy : registros;
+  const registrosVista = vistaReporte === "hoy"
+    ? registros.filter(r => r.fecha === hoyStr)
+    : registros;
 
   const reporte=proyectos.filter(p=>p.activo).map(p=>{
     const rows=[];
-    registrosFuente.forEach(reg=>{
+    registrosVista.forEach(reg=>{
       reg.items.forEach(it=>{
         if(it.pid===p.id){
           const e=empleados.find(x=>x.id===reg.eid);
@@ -615,14 +620,23 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         }
       });
     });
-    const totalH=rows.reduce((a,b)=>a+b.h,0);
-    const totalC=rows.reduce((a,b)=>a+b.costo,0);
+    const rowsFinales = vistaReporte === "acumulado"
+      ? Object.values(rows.reduce((acc, row) => {
+          const key = row.e.id;
+          if(!acc[key]) acc[key] = {...row, h: 0, costo: 0};
+          acc[key].h += row.h;
+          acc[key].costo += row.costo;
+          return acc;
+        }, {}))
+      : rows;
+    const totalH=rowsFinales.reduce((a,b)=>a+b.h,0);
+    const totalC=rowsFinales.reduce((a,b)=>a+b.costo,0);
     const pct=p.presupuesto?Math.round((totalC/p.presupuesto)*100):0;
-    return{...p,rows,totalH,totalC,pct};
+    return{...p,rows:rowsFinales,totalH,totalC,pct};
   });
 
-  const totalHorasDia=registrosFuente.reduce((a,r)=>a+r.items.reduce((b,x)=>b+x.h,0),0);
-  const totalCostoDia=registrosFuente.reduce((a,r)=>{
+  const totalHorasDia=registrosVista.reduce((a,r)=>a+r.items.reduce((b,x)=>b+x.h,0),0);
+  const totalCostoDia=registrosVista.reduce((a,r)=>{
     const e=empleados.find(x=>x.id===r.eid);
     return a+r.items.reduce((b,x)=>b+(x.h*(e?.tarifa||0)),0);
   },0);
@@ -701,8 +715,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         <div style={{width:190}}>
           <Toggle
             value={vistaReporte}
-            onChange={v=>setVistaReporte(v)}
-            opts={[{v:"hoy",l:"Hoy"},{v:"acumulado",l:"Acumulado"}]}
+            onChange={setVistaReporte}
+            opts={[{v:"hoy",l:"📅 Hoy"},{v:"acumulado",l:"📊 Acumulado"}]}
           />
         </div>
       </div>
@@ -742,7 +756,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
             :<div style={{padding:"10px 14px",fontSize:12,color:C.muted,fontStyle:"italic"}}>Sin registros hoy</div>
           }
           <div style={{padding:"8px 14px",background:over?C.red+"11":C.accent+"08",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:11,color:C.muted,fontWeight:700}}>TOTAL HOY</span>
+            <span style={{fontSize:11,color:C.muted,fontWeight:700}}>{vistaReporte==="hoy"?"TOTAL HOY":"TOTAL ACUMULADO"}</span>
             <span style={{fontSize:13,fontWeight:900,color:col}}>{item.totalH}h <span style={{fontSize:11,color:C.muted,fontWeight:400}}>{$$(item.totalC)}</span></span>
           </div>
         </div>;
@@ -756,7 +770,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           <>
             <div style={{fontSize:11,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginTop:4}}>Corregir registros</div>
             {conRegistros.map(e=>{
-              const reg=registros.find(r=>r.eid===e.id);
+              const reg=registros.find(r=>r.eid===e.id && r.fecha===hoy());
               const porTercero=reg.llenadorId!==reg.eid;
               const llenador=empleados.find(x=>x.id===reg.llenadorId);
               return <div key={e.id} style={{background:porTercero?C.red+"08":C.surface,border:`1px solid ${porTercero?C.red+"44":C.border}`,borderRadius:10,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -874,7 +888,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         onCancel={()=>setDelPerm2(null)}
       />}
       {confirmCerrar&&<Confirm
-        msg={`Este proyecto no tiene horas registradas hoy. ¿Seguro que quieres cerrarlo?`}
+        msg={`Este proyecto no tiene horas registradas. ¿Seguro que quieres cerrarlo?`}
         onOk={()=>{cerrarProyecto(confirmCerrar);setConfirmCerrar(null);}}
         onCancel={()=>setConfirmCerrar(null)}
       />}
@@ -928,7 +942,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         </div>
       </Sheet>}
       {delEmp&&<Confirm
-        msg={`¿Eliminar a "${delEmp.nombre}"? Se borrarán también sus registros de hoy.`}
+        msg={`¿Eliminar a "${delEmp.nombre}"? Se borrarán todos sus registros históricos.`}
         onOk={()=>eliminarEmpleadoConRegistros(delEmp)}
         onCancel={()=>setDelEmp(null)}
       />}
@@ -1066,7 +1080,9 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 // ── HELPERS SUPABASE (mapeo DB ↔ app) ─────────────────────────
 function fromDbProyecto(r){ return r?{ id:r.id,nombre:r.nombre,activo:r.activo,presupuesto:r.presupuesto,cerradoEn:r.cerrado_en,gastoReal:r.gasto_real,horas:r.horas,closedAt:r.closed_at?new Date(r.closed_at).getTime():null,trabajadoresSnap:r.trabajadores_snap||null }:null; }
 function toDbProyecto(p){ return { id:p.id,nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto,cerrado_en:p.cerradoEn||null,gasto_real:p.gastoReal??null,horas:p.horas??null,closed_at:p.closedAt?new Date(p.closedAt).toISOString():null,trabajadores_snap:p.trabajadoresSnap||null }; }
-function fromDbRegistro(r){ return r?{ eid:r.eid,llenadorId:r.llenador_id,items:r.items||[] ,fecha:r.fecha}:null; }
+function fromDbRegistro(r){
+  return r ? { eid:r.eid, llenadorId:r.llenador_id, items:r.items||[], fecha:r.fecha } : null;
+}
 
 // ── ROOT ──────────────────────────────────────────────────────
 export default function App(){
@@ -1163,8 +1179,8 @@ export default function App(){
     else setScreen(role);
   };
 
-  const pendientes=empleados.filter(e=>e.activo&&!registros.find(r=>r.eid===e.id));
-  const proxies=registros.filter(r=>r.llenadorId!==r.eid);
+  const pendientes=empleados.filter(e=>e.activo&&!registros.find(r=>r.eid===e.id && r.fecha===hoy()));
+  const proxies=registros.filter(r=>r.llenadorId!==r.eid && r.fecha===hoy());
 
   if(loading) return <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Segoe UI',sans-serif",color:"#777"}}><div>Cargando...</div></div>;
 
