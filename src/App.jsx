@@ -1154,6 +1154,8 @@ export default function App(){
   }, [fechaActual]);
   const isFirstSync = useRef(true);
   const isSyncing = useRef(false);
+  const needsSync = useRef(false);
+  const [syncTrigger, setSyncTrigger] = useState(0);
 
   // Cargar datos desde Supabase al montar
   useEffect(()=>{
@@ -1220,7 +1222,9 @@ export default function App(){
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("Realtime status:", status);
+      });
 
     return () => { supabase.removeChannel(canal); };
   },[]);
@@ -1234,8 +1238,12 @@ export default function App(){
         setSaving(false);
         return;
       }
-      if(isSyncing.current) return;
+      if(isSyncing.current) {
+        needsSync.current = true;
+        return;
+      }
       isSyncing.current = true;
+      needsSync.current = false;
       setSaving(true);
       setSaveError("");
       try {
@@ -1288,9 +1296,13 @@ export default function App(){
       } finally {
         isSyncing.current = false;
         setSaving(false);
+        if(needsSync.current) {
+          needsSync.current = false;
+          setSyncTrigger(t => t + 1);
+        }
       }
     })();
-  },[proyectos,empleados,registros,papelera,loading]);
+  },[proyectos,empleados,registros,papelera,loading,syncTrigger]);
 
   const guardarRegistro=(eid,llenadorId,items)=>setRegistros(prev=>{
     const hoyStr = hoy();
