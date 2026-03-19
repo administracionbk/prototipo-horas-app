@@ -1155,6 +1155,7 @@ export default function App(){
   const isFirstSync = useRef(true);
   const isSyncing = useRef(false);
   const needsSync = useRef(false);
+  const isRealtimeUpdate = useRef(false);
   const [syncTrigger, setSyncTrigger] = useState(0);
 
   // Cargar datos desde Supabase al montar
@@ -1179,6 +1180,7 @@ export default function App(){
     const canal = supabase.channel("cambios")
       .on("postgres_changes", { event: "*", schema: "public", table: "registros" },
         payload => {
+          isRealtimeUpdate.current = true;
           if(payload.eventType === "DELETE") {
             setRegistros(prev => prev.filter(r => !(r.eid === payload.old.eid && r.fecha === payload.old.fecha)));
           } else {
@@ -1194,6 +1196,7 @@ export default function App(){
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "proyectos" },
         payload => {
+          isRealtimeUpdate.current = true;
           if(payload.eventType === "DELETE") {
             setProyectos(prev => prev.filter(p => p.id !== payload.old.id));
           } else {
@@ -1209,6 +1212,7 @@ export default function App(){
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "empleados" },
         payload => {
+          isRealtimeUpdate.current = true;
           if(payload.eventType === "DELETE") {
             setEmpleados(prev => prev.filter(e => e.id !== payload.old.id));
           } else {
@@ -1236,6 +1240,10 @@ export default function App(){
       if(isFirstSync.current){
         isFirstSync.current = false;
         setSaving(false);
+        return;
+      }
+      if(isRealtimeUpdate.current) {
+        isRealtimeUpdate.current = false;
         return;
       }
       if(isSyncing.current) {
