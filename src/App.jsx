@@ -473,6 +473,38 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
   );
 }
 
+function DiaHistorial({fecha, items, totalDia, costoDia, proyectos, emp}){
+  const [abierto, setAbierto] = useState(false);
+  const completo = Math.abs(totalDia - 8) < 1e-6;
+  const excede = totalDia > 8;
+  const col = excede ? C.red : completo ? C.green : C.orange;
+  return <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
+    <div onClick={()=>setAbierto(a=>!a)} style={{padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+      <div>
+        <div style={{fontSize:13,fontWeight:700,color:C.text}}>{fecha}</div>
+        <div style={{fontSize:11,color:C.muted,marginTop:2}}>{items.length} proyecto{items.length!==1?"s":""}</div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:14,fontWeight:900,color:col}}>{formatHoras(totalDia)}</div>
+          <div style={{fontSize:11,color:C.muted}}>{$$(costoDia)}</div>
+        </div>
+        <span style={{color:C.muted,fontSize:14,transition:"transform 0.2s",display:"inline-block",transform:abierto?"rotate(90deg)":"none"}}>›</span>
+      </div>
+    </div>
+    {abierto && items.map(it => {
+      const p = proyectos.find(x => x.id === it.pid);
+      return <div key={it.pid} style={{padding:"8px 14px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:C.bg}}>
+        <span style={{fontSize:12,color:C.muted,flex:1,paddingRight:8}}>{p ? p.nombre : "—"}</span>
+        <div style={{textAlign:"right",flexShrink:0}}>
+          <span style={{fontSize:12,fontWeight:700,color:C.text}}>{formatHoras(Number(it.h)||0)}</span>
+          <span style={{fontSize:11,color:C.muted,marginLeft:6}}>{$$((Number(it.h)||0) * emp.tarifa)}</span>
+        </div>
+      </div>;
+    })}
+  </div>;
+}
+
 // ── PANEL ADMIN ───────────────────────────────────────────────
 function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,onBack,saving,saveError,onDataChanged}){
   const [tab,setTab]=useState("reporte");
@@ -490,6 +522,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const [delPerm1,setDelPerm1]=useState(null);
   const [delPerm2,setDelPerm2]=useState(null);
   const [confirmReabrir,setConfirmReabrir]=useState(null);
+  const [empHistorial,setEmpHistorial] = useState(null);
   const [errPresupuesto,setErrPresupuesto]=useState("");
   const [errTarifa,setErrTarifa]=useState("");
 
@@ -687,6 +720,65 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     const e=empleados.find(x=>x.id===r.eid);
     return a+r.items.reduce((b,x)=>b+(x.h*(e?.tarifa||0)),0);
   },0);
+
+  if(empHistorial) {
+    const emp = empleados.find(e => e.id === empHistorial.id) || empHistorial;
+    const hoy45 = new Date();
+    const dias = Array.from({length:45}, (_,i) => {
+      const d = new Date(hoy45);
+      d.setDate(d.getDate() - i);
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,'0');
+      const day = String(d.getDate()).padStart(2,'0');
+      return `${y}-${m}-${day}`;
+    });
+    const diasConRegistro = dias.map(fecha => {
+      const reg = registros.find(r => r.eid === emp.id && r.fecha === fecha);
+      const items = reg?.items?.filter(it => (Number(it.h)||0) > 0) || [];
+      return { fecha, items };
+    }).filter(d => d.items.length > 0);
+
+    const formatFecha = f => {
+      const [y,m,d] = f.split("-");
+      const meses = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+      return `${Number(d)} ${meses[Number(m)-1]} ${y}`;
+    };
+
+    const totalHoras = diasConRegistro.reduce((a,d) => a + d.items.reduce((b,it) => b+(Number(it.h)||0), 0), 0);
+    const totalCosto = diasConRegistro.reduce((a,d) => a + d.items.reduce((b,it) => b+(Number(it.h)||0)*emp.tarifa, 0), 0);
+
+    return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <button onClick={()=>setEmpHistorial(null)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:20,padding:0}}>←</button>
+        <div style={{flex:1}}>
+          <div style={{fontSize:11,color:C.accent,fontWeight:700,letterSpacing:2,textTransform:"uppercase"}}>Historial</div>
+          <div style={{fontSize:17,fontWeight:800,color:C.text}}>{emp.nombre}</div>
+        </div>
+        <div style={{width:36,height:36,borderRadius:"50%",background:C.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,color:C.accent,fontWeight:900}}>{emp.nombre[0]}</div>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
+          <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{formatHoras(totalHoras)}</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:2}}>Horas totales (45 días)</div>
+        </div>
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
+          <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{$$(totalCosto)}</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:2}}>Costo total (45 días)</div>
+        </div>
+      </div>
+
+      {diasConRegistro.length === 0 && (
+        <div style={{textAlign:"center",padding:"40px 0",color:C.muted,fontSize:13}}>Sin registros en los últimos 45 días.</div>
+      )}
+
+      {diasConRegistro.map(({fecha, items}) => {
+        const totalDia = items.reduce((a,it) => a+(Number(it.h)||0), 0);
+        const costoDia = totalDia * emp.tarifa;
+        return <DiaHistorial key={fecha} fecha={formatFecha(fecha)} items={items} totalDia={totalDia} costoDia={costoDia} proyectos={proyectos} emp={emp}/>;
+      })}
+    </div>;
+  }
 
   return <div style={{display:"flex",flexDirection:"column"}}>
     {/* topbar */}
@@ -955,7 +1047,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         const hDia=reg?reg.items.reduce((a,x)=>a+x.h,0):0;
         const porTercero=reg&&reg.llenadorId!==reg.eid;
         const llenador=porTercero?empleados.find(x=>x.id===reg.llenadorId):null;
-        return <div key={e.id} style={{background:C.surface,border:`1px solid ${porTercero?C.red+"44":C.border}`,borderRadius:10,padding:"12px 14px",opacity:e.activo?1:0.55}}>
+        return <div key={e.id} onClick={()=>setEmpHistorial(e)} style={{background:C.surface,border:`1px solid ${porTercero?C.red+"44":C.border}`,borderRadius:10,padding:"12px 14px",opacity:e.activo?1:0.55,cursor:"pointer"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{width:36,height:36,borderRadius:"50%",flexShrink:0,background:e.activo?C.accent+"22":C.border,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:e.activo?C.accent:C.muted,fontWeight:900}}>{e.nombre[0]}</div>
             <div style={{flex:1,minWidth:0}}>
@@ -968,8 +1060,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
               </div>
             </div>
             <div style={{display:"flex",gap:6,flexShrink:0}}>
-              <button onClick={()=>{setFemp({nombre:e.nombre,activo:e.activo,tarifa:e.tarifa});setMemp(e.id);}} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
-              <button onClick={()=>setDelEmp(e)} style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:8,padding:"6px 10px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🗑️</button>
+              <button onClick={ev=>{ev.stopPropagation();setFemp({nombre:e.nombre,activo:e.activo,tarifa:e.tarifa});setMemp(e.id);}} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
+              <button onClick={ev=>{ev.stopPropagation();setDelEmp(e);}} style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:8,padding:"6px 10px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🗑️</button>
             </div>
           </div>
         </div>;
