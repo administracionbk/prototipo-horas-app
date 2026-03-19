@@ -1143,6 +1143,15 @@ export default function App(){
   const [papelera,setPapelera]=useState([]);
   const [saving,setSaving]=useState(false);
   const [saveError,setSaveError]=useState("");
+  const [fechaActual, setFechaActual] = useState(hoy());
+
+  useEffect(() => {
+    const intervalo = setInterval(() => {
+      const nueva = hoy();
+      if(nueva !== fechaActual) setFechaActual(nueva);
+    }, 60000);
+    return () => clearInterval(intervalo);
+  }, [fechaActual]);
   const isFirstSync = useRef(true);
   const isSyncing = useRef(false);
 
