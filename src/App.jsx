@@ -1173,6 +1173,56 @@ export default function App(){
       } catch(e){ console.warn("Error cargando Supabase",e); }
       setLoading(false);
     })();
+
+    const canal = supabase.channel("cambios")
+      .on("postgres_changes", { event: "*", schema: "public", table: "registros" },
+        payload => {
+          if(payload.eventType === "DELETE") {
+            setRegistros(prev => prev.filter(r => !(r.eid === payload.old.eid && r.fecha === payload.old.fecha)));
+          } else {
+            const nuevo = fromDbRegistro(payload.new);
+            if(!nuevo) return;
+            setRegistros(prev => {
+              const existe = prev.find(r => r.eid === nuevo.eid && r.fecha === nuevo.fecha);
+              if(existe) return prev.map(r => (r.eid === nuevo.eid && r.fecha === nuevo.fecha) ? nuevo : r);
+              return [...prev, nuevo];
+            });
+          }
+        }
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "proyectos" },
+        payload => {
+          if(payload.eventType === "DELETE") {
+            setProyectos(prev => prev.filter(p => p.id !== payload.old.id));
+          } else {
+            const nuevo = fromDbProyecto(payload.new);
+            if(!nuevo) return;
+            setProyectos(prev => {
+              const existe = prev.find(p => p.id === nuevo.id);
+              if(existe) return prev.map(p => p.id === nuevo.id ? nuevo : p);
+              return [...prev, nuevo];
+            });
+          }
+        }
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "empleados" },
+        payload => {
+          if(payload.eventType === "DELETE") {
+            setEmpleados(prev => prev.filter(e => e.id !== payload.old.id));
+          } else {
+            const nuevo = payload.new;
+            const emp = { id: nuevo.id, nombre: nuevo.nombre, activo: nuevo.activo, tarifa: nuevo.tarifa };
+            setEmpleados(prev => {
+              const existe = prev.find(e => e.id === emp.id);
+              if(existe) return prev.map(e => e.id === emp.id ? emp : e);
+              return [...prev, emp];
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(canal); };
   },[]);
 
   // Persistir a Supabase cuando cambie el estado
