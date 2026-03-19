@@ -474,7 +474,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
 }
 
 // ── PANEL ADMIN ───────────────────────────────────────────────
-function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,onBack,saving,saveError}){
+function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,onBack,saving,saveError,onDataChanged}){
   const [tab,setTab]=useState("reporte");
 
   // Proyectos
@@ -498,6 +498,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setRegistros(prev=>prev.filter(r=>r.eid!==emp.id));
     setEmpleados(prev=>prev.filter(x=>x.id!==emp.id));
     setDelEmp(null);
+    onDataChanged();
   };
   // Corrección admin
   const [mcorr,setMcorr]=useState(null);
@@ -520,6 +521,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setPapelera(prev=>[...prev,{...p,deletedAt:Date.now(),registrosSnap:snap}]);
     setProyectos(prev=>prev.filter(x=>x.id!==p.id));
     setDelProy(null);
+    onDataChanged();
   };
 
   // Restaurar proyecto desde papelera
@@ -535,6 +537,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       return next;
     });
     setPapelera(prev=>prev.filter(x=>x.id!==item.id));
+    onDataChanged();
   };
 
   // Cerrar: marca activo:false y guarda snapshot de gasto y desglose por trabajador
@@ -575,6 +578,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       const trabajadoresSnap = [...prevHist,...rowsAgrupadas];
       return {...x,activo:false,cerradoEn,gastoReal,horas,trabajadoresSnap,closedAt};
     }));
+    onDataChanged();
   };
 
   // Reabrir: solo vuelve activo:true, limpia snapshot acumulado
@@ -583,6 +587,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       ? {...x,activo:true,cerradoEn:null,gastoReal:null,horas:null,trabajadoresSnap:null}
       : x
     ));
+    onDataChanged();
   };
 
   // ── proyectos handlers
@@ -598,6 +603,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     else setProyectos(p=>p.map(x=>x.id===mproy?{...x,...d}:x));
     setMproy(null);
     setErrPresupuesto("");
+    onDataChanged();
   };
 
   // ── empleados handlers
@@ -613,6 +619,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     else setEmpleados(e=>e.map(x=>x.id===memp?{...x,...d}:x));
     setMemp(null);
     setErrTarifa("");
+    onDataChanged();
   };
 
   // ── corrección
@@ -637,6 +644,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       return [...prev, {eid:mcorr, llenadorId:mcorr, fecha:hoy(), items}];
     });
     setMcorr(null);
+    onDataChanged();
   };
 
   // ── cálculos
@@ -925,7 +933,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       />}
       {delPerm2&&<Confirm
         msg={`Esta acción es IRREVERSIBLE.\nSe eliminará "${delPerm2.nombre}" y sus registros asociados.`}
-        onOk={()=>{setPapelera(prev=>prev.filter(x=>x.id!==delPerm2.id));setDelPerm2(null);}}
+        onOk={()=>{setPapelera(prev=>prev.filter(x=>x.id!==delPerm2.id));setDelPerm2(null);onDataChanged();}}
         onCancel={()=>setDelPerm2(null)}
       />}
       {confirmCerrar&&<Confirm
@@ -1145,6 +1153,12 @@ export default function App(){
   const [saveError,setSaveError]=useState("");
   const [fechaActual, setFechaActual] = useState(hoy());
 
+  const isFirstSync = useRef(true);
+  const isSyncing = useRef(false);
+  const stateForSync = useRef({ proyectos:[], empleados:[], registros:[], papelera:[] });
+  const needsSync = useRef(false);
+  const [syncTrigger, setSyncTrigger] = useState(0);
+
   useEffect(() => {
     const intervalo = setInterval(() => {
       const nueva = hoy();
@@ -1152,11 +1166,10 @@ export default function App(){
     }, 60000);
     return () => clearInterval(intervalo);
   }, [fechaActual]);
-  const isFirstSync = useRef(true);
-  const isSyncing = useRef(false);
-  const needsSync = useRef(false);
-  const isRealtimeUpdate = useRef(false);
-  const [syncTrigger, setSyncTrigger] = useState(0);
+
+  useEffect(() => {
+    stateForSync.current = { proyectos, empleados, registros, papelera };
+  }, [proyectos, empleados, registros, papelera]);
 
   // Cargar datos desde Supabase al montar
   useEffect(()=>{
@@ -1180,7 +1193,6 @@ export default function App(){
     const canal = supabase.channel("cambios")
       .on("postgres_changes", { event: "*", schema: "public", table: "registros" },
         payload => {
-          isRealtimeUpdate.current = true;
           if(payload.eventType === "DELETE") {
             setRegistros(prev => prev.filter(r => !(r.eid === payload.old.eid && r.fecha === payload.old.fecha)));
           } else {
@@ -1196,7 +1208,6 @@ export default function App(){
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "proyectos" },
         payload => {
-          isRealtimeUpdate.current = true;
           if(payload.eventType === "DELETE") {
             setProyectos(prev => prev.filter(p => p.id !== payload.old.id));
           } else {
@@ -1212,7 +1223,6 @@ export default function App(){
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "empleados" },
         payload => {
-          isRealtimeUpdate.current = true;
           if(payload.eventType === "DELETE") {
             setEmpleados(prev => prev.filter(e => e.id !== payload.old.id));
           } else {
@@ -1242,16 +1252,13 @@ export default function App(){
         setSaving(false);
         return;
       }
-      if(isRealtimeUpdate.current) {
-        isRealtimeUpdate.current = false;
-        return;
-      }
       if(isSyncing.current) {
         needsSync.current = true;
         return;
       }
       isSyncing.current = true;
       needsSync.current = false;
+      const { proyectos, empleados, registros, papelera } = stateForSync.current;
       setSaving(true);
       setSaveError("");
       try {
@@ -1310,17 +1317,20 @@ export default function App(){
         }
       }
     })();
-  },[proyectos,empleados,registros,papelera,loading,syncTrigger]);
+  },[syncTrigger,loading]);
 
-  const guardarRegistro=(eid,llenadorId,items)=>setRegistros(prev=>{
-    const hoyStr = hoy();
-    if(items.length === 0) {
-      return prev.filter(r => !(r.eid===eid && r.fecha===hoyStr));
-    }
-    if(prev.find(r=>r.eid===eid && r.fecha===hoyStr))
-      return prev.map(r=> (r.eid===eid && r.fecha===hoyStr)?{...r,llenadorId,items}:r);
-    return [...prev,{eid,llenadorId,items,fecha:hoyStr}];
-  });
+  const guardarRegistro=(eid,llenadorId,items)=>{
+    setRegistros(prev=>{
+      const hoyStr = hoy();
+      if(items.length === 0) {
+        return prev.filter(r => !(r.eid===eid && r.fecha===hoyStr));
+      }
+      if(prev.find(r=>r.eid===eid && r.fecha===hoyStr))
+        return prev.map(r=> (r.eid===eid && r.fecha===hoyStr)?{...r,llenadorId,items}:r);
+      return [...prev,{eid,llenadorId,items,fecha:hoyStr}];
+    });
+    setSyncTrigger(t => t + 1);
+  };
 
   const ir=role=>{
     if(role==="admin"){setAuthed(false);setScreen("pin");}
@@ -1351,7 +1361,7 @@ export default function App(){
           {screen==="home"&&<PantallaInicio onSelect={ir}/>}
           {screen==="worker"&&<PantallaTrabajador proyectos={proyectos} empleados={empleados} registros={registros} onGuardar={guardarRegistro} onBack={()=>setScreen("home")} saving={saving} saveError={saveError}/>}
           {screen==="pin"&&<PantallaPIN onSuccess={()=>{setAuthed(true);setScreen("admin");}} onBack={()=>setScreen("home")}/>}
-          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError}/>}
+          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)}/>}
         </div>
 
         <div style={{height:22,background:"#1A1A1A",borderTop:"1px solid #2A2A2A",display:"flex",alignItems:"center",justifyContent:"center"}}>
