@@ -4,7 +4,7 @@ import { supabase, hoy } from "./supabaseClient";
 // ── TEMA ─────────────────────────────────────────────────────
 const C = {
   bg:"#0F0F0F", surface:"#1A1A1A", border:"#2A2A2A",
-  accent:"#F59E0B", text:"#F5F5F0", muted:"#777",
+  accent:"#F59E0B", text:"#F5F5F0", muted:"#888",
   green:"#10B981", red:"#EF4444", orange:"#F97316",
 };
 
@@ -36,7 +36,7 @@ function Badge({label,color=C.accent}){
 }
 
 function Pill({active,onClick,children}){
-  return <button onClick={onClick} style={{background:active?C.accent:C.surface,color:active?"#000":C.muted,border:`1px solid ${active?C.accent:C.border}`,borderRadius:20,padding:"6px 14px",fontSize:13,fontWeight:active?700:400,cursor:"pointer"}}>{children}</button>;
+  return <button onClick={onClick} style={{background:active?C.accent:C.surface,color:active?"#000":C.muted,border:`1px solid ${active?C.accent:C.border}`,borderRadius:20,padding:"8px 18px",fontSize:14,fontWeight:active?700:400,cursor:"pointer"}}>{children}</button>;
 }
 
 function Btn({onClick,children,variant="primary",full,disabled}){
@@ -47,19 +47,21 @@ function Btn({onClick,children,variant="primary",full,disabled}){
     danger:{background:C.red+"11",color:C.red,border:`1px solid ${C.red}44`,cursor:"pointer"},
     warn:{background:C.orange+"22",color:C.orange,border:`1px solid ${C.orange}44`,fontWeight:700,cursor:"pointer"},
   };
-  return <button onClick={disabled?undefined:onClick} style={{...v[variant]||v.primary,borderRadius:9,padding:"11px 14px",fontSize:13,width:full?"100%":"auto",fontFamily:"inherit"}}>{children}</button>;
+  return <button onClick={disabled?undefined:onClick} style={{...v[variant]||v.primary,borderRadius:9,padding:"12px 18px",fontSize:13,width:full?"100%":"auto",fontFamily:"inherit"}}>{children}</button>;
 }
 
 function Field({label,value,onChange,placeholder,type="text"}){
   return <div>
-    {label&&<div style={{fontSize:12,color:C.muted,marginBottom:6}}>{label}</div>}
-    <input value={value} onChange={onChange} placeholder={placeholder} type={type} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+    {label&&<div style={{fontSize:13,color:C.muted,marginBottom:6}}>{label}</div>}
+    <input value={value} onChange={onChange} placeholder={placeholder} type={type} style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px",color:C.text,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
   </div>;
 }
 
-function Toggle({value,onChange,opts}){
-  return <div style={{display:"flex",gap:8}}>
-    {opts.map(o=><button key={String(o.v)} onClick={()=>onChange(o.v)} style={{flex:1,padding:"10px",background:value===o.v?C.accent+"22":C.bg,border:`1px solid ${value===o.v?C.accent:C.border}`,borderRadius:8,color:value===o.v?C.accent:C.muted,fontWeight:value===o.v?700:400,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{o.l}</button>)}
+function Toggle({value,onChange,opts,compact}){
+  const pad = compact ? "8px 6px" : "10px";
+  const gap = compact ? 6 : 8;
+  return <div style={{display:"flex",gap}}>
+    {opts.map(o=><button key={String(o.v)} onClick={()=>onChange(o.v)} style={{flex:1,minWidth:0,padding:pad,background:value===o.v?C.accent+"22":C.bg,border:`1px solid ${value===o.v?C.accent:C.border}`,borderRadius:8,color:value===o.v?C.accent:C.muted,fontWeight:value===o.v?700:400,fontSize:13,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{o.l}</button>)}
   </div>;
 }
 
@@ -82,17 +84,17 @@ function Sheet({title,onClose,children,variant="drawer"}){
         background:C.surface,
         border:`1px solid ${C.border}`,
         borderRadius: drawer ? "20px 20px 0 0" : 16,
-        padding:24,
+        padding:"28px 28px 36px 28px",
         width:"100%",
         maxWidth:420,
-        maxHeight: drawer ? "88vh" : "min(82vh, calc(100vh - min(10vh, 72px) - 28px))",
+        maxHeight: drawer ? "92vh" : "min(88vh, calc(100vh - 40px))",
         overflowY:"auto",
         WebkitOverflowScrolling:"touch",
         boxSizing:"border-box",
       }}
       onClick={e=>e.stopPropagation()}
     >
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:18}}>
         <span style={{fontSize:16,fontWeight:800,color:C.text}}>{title}</span>
         <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:24,cursor:"pointer",lineHeight:1,padding:0}}>×</button>
       </div>
@@ -127,14 +129,14 @@ function HourPicker({value,onChange}){
         key={h}
         onClick={()=>onChange(h)}
         style={{
-          width:40,
-          height:34,
+          width:44,
+          height:40,
           borderRadius:7,
           background:value===h?C.accent:C.bg,
           border:`1px solid ${value===h?C.accent:C.border}`,
           color:value===h?"#000":C.text,
           fontWeight:700,
-          fontSize:11,
+          fontSize:13,
           cursor:"pointer",
           fontFamily:"inherit"
         }}
@@ -158,7 +160,7 @@ function ProyectoSelector({proyectos,selec,setSelec,horas,setHoras,extraVisibleI
   return <div style={{display:"flex",flexDirection:"column",gap:10}}>
     {proyectos.filter(p=>p.activo || extraVisibleIds.includes(p.id)).map(p=>{
       const sel=selec.includes(p.id);
-      return <div key={p.id} style={{background:sel?C.accent+"11":C.surface,border:`1px solid ${sel?C.accent:C.border}`,borderRadius:10,padding:"12px 14px",cursor:"pointer",userSelect:"none"}} onClick={()=>toggle(p.id)}>
+      return <div key={p.id} style={{background:sel?C.accent+"11":C.surface,border:`1px solid ${sel?C.accent:C.border}`,borderRadius:10,padding:"14px 16px",cursor:"pointer",userSelect:"none"}} onClick={()=>toggle(p.id)}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${sel?C.accent:C.border}`,background:sel?C.accent:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#000",fontWeight:900,flexShrink:0}}>{sel?"✓":""}</div>
           <span style={{fontSize:13,color:C.text,fontWeight:sel?600:400}}>
@@ -179,7 +181,7 @@ function ProyectoSelector({proyectos,selec,setSelec,horas,setHoras,extraVisibleI
           {formatHoras(totalH)}
         </span>
         {esJornada && (
-          <span style={{fontSize:12,color:C.green,fontWeight:700}}>✓ Jornada completa</span>
+          <span style={{fontSize:12,color:C.green,fontWeight:700,background:C.green+"11",border:`1px solid ${C.green}44`,borderRadius:6,padding:"3px 8px"}}>✓ Jornada completa</span>
         )}
         {falta && (
           <span style={{fontSize:12,color:C.orange,fontWeight:700}}>
@@ -223,12 +225,13 @@ function PantallaPIN({onSuccess,onBack}){
   const [shake,setShake]=useState(false);
 
   const press = d => {
+    const hashPin = p => p.split("").reduce((a,c,i)=>a+c.charCodeAt(0)*(i+7),0);
     if(pin.length>=4) return;
     const n=pin+d;
     setPin(n); setErr(false);
     if(n.length===4){
       setTimeout(()=>{
-        if(n==="2014") onSuccess();
+        if(hashPin(n) === hashPin("2014")) onSuccess();
         else{setShake(true);setErr(true);setTimeout(()=>{setPin("");setShake(false);},700);}
       },200);
     }
@@ -236,7 +239,6 @@ function PantallaPIN({onSuccess,onBack}){
   const del = () => { setPin(p=>p.slice(0,-1)); setErr(false); };
 
   return <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:22,paddingTop:16}}>
-    <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}`}</style>
     <button onClick={onBack} style={{alignSelf:"flex-start",background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:20,padding:0}}>←</button>
     <div style={{textAlign:"center"}}>
       <div style={{fontSize:38,marginBottom:10}}>🔒</div>
@@ -345,7 +347,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
           <div style={{fontSize:13,color:C.muted,marginBottom:4}}>Selecciona <strong style={{color:C.text}}>tu nombre</strong> — quien tiene el teléfono ahora:</div>
           {empleados.filter(e=>e.activo).map(e => (
             <button key={e.id} onClick={()=>elegirLlenador(e)}
-              style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 16px",color:C.text,cursor:"pointer",textAlign:"left",fontSize:14,display:"flex",alignItems:"center",gap:12,fontFamily:"inherit",width:"100%"}}>
+              style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"16px 16px",color:C.text,cursor:"pointer",textAlign:"left",fontSize:14,display:"flex",alignItems:"center",gap:12,fontFamily:"inherit",width:"100%"}}>
               <div style={{width:34,height:34,borderRadius:"50%",background:C.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.accent,fontWeight:900,flexShrink:0}}>{e.nombre[0]}</div>
               <span>{e.nombre}</span>
               <span style={{marginLeft:"auto",color:C.accent}}>{"→"}</span>
@@ -359,12 +361,12 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
           <div style={{background:C.accent+"11",border:`1px solid ${C.accent}33`,borderRadius:10,padding:"10px 14px",fontSize:13,color:C.accent,fontWeight:600}}>
             {"👋 Hola, "}<strong>{llenador ? llenador.nombre : ""}</strong>{". Selecciona de quién registrarás las horas:"}
           </div>
-          {empleados.filter(e=>e.activo).map(e => {
+          {empleados.filter(e => e.activo || registros.find(r => r.eid === e.id && r.fecha === hoy())).map(e => {
             const yaReg  = registros.find(r => r.eid === e.id && r.fecha === hoy() && r.items?.some(it => (Number(it.h)||0) > 0));
             const esTuyo = llenador && e.id === llenador.id;
             return (
               <button key={e.id} onClick={()=>elegirTarget(e)}
-                style={{background:C.surface,border:`1px solid ${esTuyo?C.accent+"66":C.border}`,borderRadius:10,padding:"12px 16px",color:C.text,cursor:"pointer",textAlign:"left",fontSize:14,display:"flex",alignItems:"center",gap:12,fontFamily:"inherit",width:"100%"}}>
+                style={{background:C.surface,border:`1px solid ${esTuyo?C.accent+"66":C.border}`,borderRadius:10,padding:"16px 16px",color:C.text,cursor:"pointer",textAlign:"left",fontSize:14,display:"flex",alignItems:"center",gap:12,fontFamily:"inherit",width:"100%"}}>
                 <div style={{width:34,height:34,borderRadius:"50%",background:esTuyo?C.accent+"33":C.surface,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:esTuyo?C.accent:C.muted,fontWeight:900,flexShrink:0,border:`1px solid ${esTuyo?C.accent+"55":C.border}`}}>{e.nombre[0]}</div>
                 <div style={{flex:1}}>
                   <span>{e.nombre}</span>
@@ -434,7 +436,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
             {editando ? "Corrige las horas de " : "Selecciona proyectos y horas de "}
             <strong style={{color:C.text}}>{target ? target.nombre : ""}</strong>:
           </div>
-          <ProyectoSelector proyectos={proyectos} selec={selec} setSelec={setSelec} horas={horas} setHoras={setHoras}/>
+          <ProyectoSelector proyectos={proyectos} selec={selec} setSelec={setSelec} horas={horas} setHoras={setHoras} extraVisibleIds={editando && regExist ? regExist.items.map(x => x.pid) : []}/>
           <Btn onClick={enviar} full disabled={!canSend || saving}>
             {saving ? "Guardando..." : (editando ? "Guardar corrección →" : "Enviar registro →")}
           </Btn>
@@ -453,7 +455,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
               {"📋 Registrado por: "}<strong>{llenador ? llenador.nombre : ""}</strong>{" en nombre de "}<strong>{target ? target.nombre : ""}</strong>
             </div>
           )}
-          <div style={{background:C.surface,borderRadius:10,padding:14,border:`1px solid ${C.border}`,textAlign:"left",marginBottom:16}}>
+          <div style={{background:C.surface,borderRadius:10,padding:14,border:`1px solid ${Math.abs(totalH-8)<1e-6?C.green+"44":C.border}`,textAlign:"left",marginBottom:16}}>
             <div style={{fontSize:11,color:C.accent,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Resumen</div>
             {selec.map(id => {
               const p = proyectos.find(x => x.id === id);
@@ -469,14 +471,7 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
               <span style={{color:C.accent,fontWeight:900,fontSize:15}}>{formatHoras(totalH)}</span>
             </div>
           </div>
-          <Btn onClick={()=>{
-            if(tieneProgreso){
-              setConfirmExit(true);
-            }else{
-              limpiarFlujo();
-              onBack();
-            }
-          }} variant="secondary">
+          <Btn onClick={() => { limpiarFlujo(); onBack(); }} variant="secondary">
             Volver al inicio
           </Btn>
         </div>
@@ -505,7 +500,7 @@ function DiaHistorial({fecha, items, totalDia, costoDia, proyectos, emp}){
   const excede = totalDia > 8;
   const col = excede ? C.red : completo ? C.green : C.orange;
   return <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
-    <div onClick={()=>setAbierto(a=>!a)} style={{padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+    <div onClick={()=>setAbierto(a=>!a)} style={{padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
       <div>
         <div style={{fontSize:13,fontWeight:700,color:C.text}}>{fecha}</div>
         <div style={{fontSize:11,color:C.muted,marginTop:2}}>{items.length} proyecto{items.length!==1?"s":""}</div>
@@ -532,7 +527,7 @@ function DiaHistorial({fecha, items, totalDia, costoDia, proyectos, emp}){
 }
 
 // ── PANEL ADMIN ───────────────────────────────────────────────
-function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,bonos,setBonos,onBack,saving,saveError,onDataChanged}){
+function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,bonos,setBonos,onBack,saving,saveError,onDataChanged,pendingDeletedEids}){
   const [tab,setTab]=useState("reporte");
 
   // Proyectos
@@ -564,7 +559,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setBonos(prev=>prev.filter(b=>b.eid!==emp.id));
     setEmpleados(prev=>prev.filter(x=>x.id!==emp.id));
     setDelEmp(null);
-    onDataChanged();
+    pendingDeletedEids.current = [...pendingDeletedEids.current, emp.id];
+    setTimeout(() => onDataChanged(), 0);
   };
   // Corrección admin
   const [mcorr,setMcorr]=useState(null);
@@ -587,7 +583,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setPapelera(prev=>[...prev,{...p,deletedAt:Date.now(),registrosSnap:snap}]);
     setProyectos(prev=>prev.filter(x=>x.id!==p.id));
     setDelProy(null);
-    onDataChanged();
+    setTimeout(() => onDataChanged(), 0);
   };
 
   // Restaurar proyecto desde papelera
@@ -603,7 +599,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       return next;
     });
     setPapelera(prev=>prev.filter(x=>x.id!==item.id));
-    onDataChanged();
+    setTimeout(() => onDataChanged(), 0);
   };
 
   // Cerrar: marca activo:false y guarda snapshot de gasto y desglose por trabajador
@@ -641,11 +637,10 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     const closedAt = Date.now();
     setProyectos(prev=>prev.map(x=>{
       if(x.id!==p.id) return x;
-      const prevHist = Array.isArray(x.trabajadoresSnap)?x.trabajadoresSnap:[];
-      const trabajadoresSnap = [...prevHist,...rowsAgrupadas];
+      const trabajadoresSnap = rowsAgrupadas;
       return {...x,activo:false,cerradoEn,gastoReal,horas,trabajadoresSnap,closedAt};
     }));
-    onDataChanged();
+    setTimeout(() => onDataChanged(), 0);
   };
 
   // Reabrir: solo vuelve activo:true, limpia snapshot acumulado
@@ -654,7 +649,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       ? {...x,activo:true,cerradoEn:null,gastoReal:null,horas:null,trabajadoresSnap:null}
       : x
     ));
-    onDataChanged();
+    setTimeout(() => onDataChanged(), 0);
   };
 
   // ── proyectos handlers
@@ -670,7 +665,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     else setProyectos(p=>p.map(x=>x.id===mproy?{...x,...d}:x));
     setMproy(null);
     setErrPresupuesto("");
-    onDataChanged();
+    setTimeout(() => onDataChanged(), 0);
   };
 
   // ── empleados handlers
@@ -686,7 +681,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     else setEmpleados(e=>e.map(x=>x.id===memp?{...x,...d}:x));
     setMemp(null);
     setErrTarifa("");
-    onDataChanged();
+    setTimeout(() => onDataChanged(), 0);
   };
 
   // ── corrección
@@ -711,7 +706,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       return [...prev, {eid:mcorr, llenadorId:mcorr, fecha:hoy(), items}];
     });
     setMcorr(null);
-    onDataChanged();
+    setTimeout(() => onDataChanged(), 0);
   };
 
   const guardarBono = () => {
@@ -723,7 +718,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setMBono(false);
     setFBono({eid:"", pid:"", monto:"", concepto:""});
     setErrBono("");
-    onDataChanged();
+    setTimeout(() => onDataChanged(), 0);
   };
 
   const guardarHistorico = () => {
@@ -742,16 +737,17 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setMHistorico(false);
     setFHist({eid:"", fecha:"", selec:[], horas:{}});
     setErrHist("");
-    onDataChanged();
+    setTimeout(() => onDataChanged(), 0);
   };
 
   const eliminarBono = (id) => {
     setBonos(prev => prev.filter(b => b.id !== id));
-    onDataChanged();
+    setTimeout(() => onDataChanged(), 0);
   };
 
   // ── cálculos
   const [vistaReporte,setVistaReporte] = useState("hoy");
+  useEffect(() => { setVistaReporte("hoy"); }, [tab]);
   const hoyStr = hoy();
   const activos=empleados.filter(e=>e.activo);
   const pendientes=activos.filter(e=>!registros.find(r=>r.eid===e.id && r.fecha===hoyStr && r.items?.some(it=>(Number(it.h)||0)>0)));
@@ -854,7 +850,10 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       </div>
 
       {diasConRegistro.length === 0 && (
-        <div style={{textAlign:"center",padding:"40px 0",color:C.muted,fontSize:13}}>Sin registros en los últimos 90 días.</div>
+        <div style={{textAlign:"center",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:32}}>
+          <div style={{fontSize:32,marginBottom:16}}>📋</div>
+          <div style={{fontSize:14,color:C.muted,lineHeight:1.5}}>Sin registros en los últimos 90 días.</div>
+        </div>
       )}
 
       {diasConRegistro.map(({fecha, items}) => {
@@ -867,7 +866,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
   return <div style={{display:"flex",flexDirection:"column"}}>
     {/* topbar */}
-    <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,borderRadius:"12px 12px 0 0",margin:"-20px -20px 16px -20px"}}>
+    <div style={{position:"sticky",top:-20,zIndex:10,background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"13px 16px",display:"flex",alignItems:"center",gap:12,borderRadius:"12px 12px 0 0",margin:"-20px -20px 16px -20px"}}>
       <button onClick={onBack} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:20,padding:0}}>←</button>
       <div>
         <div style={{fontSize:11,color:C.accent,fontWeight:700,letterSpacing:2,textTransform:"uppercase"}}>Panel Admin</div>
@@ -888,7 +887,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     {/* tabs */}
     <div style={{display:"flex",gap:6,marginBottom:16}}>
       {[{id:"reporte",l:"📋 Reporte"},{id:"proyectos",l:"🏗️ Proyectos"},{id:"empleados",l:"👷 Empleados"},{id:"cierre",l:"📅 Cierre"}].map(t=>(
-        <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"8px 2px",background:tab===t.id?C.accent:C.surface,border:`1px solid ${tab===t.id?C.accent:C.border}`,borderRadius:8,color:tab===t.id?"#000":C.muted,fontWeight:tab===t.id?800:400,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>
+        <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px",background:tab===t.id?C.accent:C.surface,border:`1px solid ${tab===t.id?C.accent:C.border}`,borderRadius:8,color:tab===t.id?"#000":C.muted,fontWeight:tab===t.id?800:400,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>
       ))}
     </div>
 
@@ -896,7 +895,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     {tab==="reporte"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
 
       {/* alerta pendientes */}
-      {pendientes.length>0&&<div style={{background:C.orange+"0f",border:`1px solid ${C.orange}44`,borderRadius:12,padding:"12px 14px"}}>
+      {pendientes.length>0&&<div style={{background:C.orange+"0f",border:`1px solid ${C.orange}44`,borderRadius:12,padding:"16px 16px"}}>
         <div style={{fontSize:12,fontWeight:800,color:C.orange,marginBottom:8}}>⚠️ NO REGISTRARON HOY</div>
         {pendientes.map(e=><div key={e.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
           <span style={{fontSize:13,color:C.muted}}>{e.nombre}</span>
@@ -905,7 +904,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       </div>}
 
       {/* alerta registros por tercero */}
-      {proxies.length>0&&<div style={{background:C.red+"0f",border:`1px solid ${C.red}44`,borderRadius:12,padding:"12px 14px"}}>
+      {proxies.length>0&&<div style={{background:C.red+"0f",border:`1px solid ${C.red}44`,borderRadius:12,padding:"16px 16px"}}>
         <div style={{fontSize:12,fontWeight:800,color:C.red,marginBottom:8}}>👤 REGISTROS POR TERCERO</div>
         {proxies.map(r=>{
           const emp=empleados.find(e=>e.id===r.eid);
@@ -934,13 +933,14 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         </div>)}
       </div>
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4,gap:8}}>
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:4}}>
         <div style={{fontSize:11,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontWeight:700}}>Desglose por proyecto</div>
-        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+        <div style={{display:"flex",flexWrap:"wrap",alignItems:"stretch",gap:8}}>
           <Btn onClick={()=>{setFBono({eid:"",pid:"",monto:"",concepto:""});setErrBono("");setMBono(true);}} variant="ghost">+ Bono</Btn>
           <Btn onClick={()=>{setFHist({eid:"",fecha:"",selec:[],horas:{}});setErrHist("");setMHistorico(true);}} variant="ghost">+ Histórico</Btn>
-          <div style={{width:190}}>
+          <div style={{flex:"1 1 200px",minWidth:0,maxWidth:"100%"}}>
             <Toggle
+              compact
               value={vistaReporte}
               onChange={setVistaReporte}
               opts={[{v:"hoy",l:"📅 Hoy"},{v:"acumulado",l:"📊 Acumulado"}]}
@@ -961,7 +961,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
               </div>
               <Badge label={`${item.pct}%`} color={col}/>
             </div>
-            <div style={{marginTop:8,height:5,background:C.border,borderRadius:3,overflow:"hidden"}}>
+            <div style={{marginTop:8,height:7,background:C.border,borderRadius:3,overflow:"hidden"}}>
               <div style={{width:`${Math.min(item.pct,100)}%`,height:"100%",background:col,borderRadius:3,transition:"width 0.4s"}}/>
             </div>
           </div>
@@ -1124,7 +1124,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
             <div style={{fontSize:11,color:C.muted,marginTop:3}}>Presupuesto: <strong style={{color:C.accent}}>{$$(p.presupuesto)}</strong></div>
           </div>
           <div style={{display:"flex",gap:6,flexShrink:0}}>
-            <button onClick={()=>{setFproy({nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto});setMproy(p.id);}} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
+            <button onClick={()=>{setFproy({nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto});setMproy(p.id);}} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 14px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
             <button
               onClick={()=>{
                 const tieneHoras = registros.some(reg =>
@@ -1133,12 +1133,12 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                 if(!tieneHoras) setConfirmCerrar(p);
                 else cerrarProyecto(p);
               }}
-              style={{background:C.orange+"11",border:`1px solid ${C.orange}44`,borderRadius:8,padding:"6px 10px",color:C.orange,fontSize:12,cursor:saving?"not-allowed":"pointer",opacity:saving?0.6:1,fontFamily:"inherit"}}
+              style={{background:C.orange+"11",border:`1px solid ${C.orange}44`,borderRadius:8,padding:"8px 14px",color:C.orange,fontSize:12,cursor:saving?"not-allowed":"pointer",opacity:saving?0.6:1,fontFamily:"inherit"}}
               disabled={saving}
             >
               🔒 Cerrar
             </button>
-            <button onClick={()=>setDelProy(p)} style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:8,padding:"6px 10px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🗑️</button>
+            <button onClick={()=>setDelProy(p)} style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:8,padding:"8px 14px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🗑️</button>
           </div>
         </div>
       </div>)}
@@ -1211,7 +1211,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           setBonos(prev=>prev.filter(b=>b.pid!==delPerm2.id));
           setPapelera(prev=>prev.filter(x=>x.id!==delPerm2.id));
           setDelPerm2(null);
-          onDataChanged();
+          setTimeout(() => onDataChanged(), 0);
         }}
         onCancel={()=>setDelPerm2(null)}
       />}
@@ -1247,8 +1247,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
               </div>
             </div>
             <div style={{display:"flex",gap:6,flexShrink:0}}>
-              <button onClick={ev=>{ev.stopPropagation();setFemp({nombre:e.nombre,activo:e.activo,tarifa:e.tarifa});setMemp(e.id);}} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 10px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
-              <button onClick={ev=>{ev.stopPropagation();setDelEmp(e);}} style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:8,padding:"6px 10px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🗑️</button>
+              <button onClick={ev=>{ev.stopPropagation();setFemp({nombre:e.nombre,activo:e.activo,tarifa:e.tarifa});setMemp(e.id);}} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 14px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
+              <button onClick={ev=>{ev.stopPropagation();setDelEmp(e);}} style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:8,padding:"8px 14px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🗑️</button>
             </div>
           </div>
         </div>;
@@ -1293,7 +1293,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           </div>
         </div>
 
-        {cerrados.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:C.muted,fontSize:13}}>Aún no hay proyectos cerrados.</div>}
+        {cerrados.length===0&&<div style={{textAlign:"center",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:32}}><div style={{fontSize:32,marginBottom:16}}>📭</div><div style={{fontSize:14,color:C.muted,lineHeight:1.5}}>Aún no hay proyectos cerrados.</div></div>}
 
         {cerrados.map(item=>{
           const gasto = item.gastoReal||0;
@@ -1319,7 +1319,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                 </div>
                 <span style={{background:col+"22",color:col,border:`1px solid ${col}44`,borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{pct}%</span>
               </div>
-              <div style={{marginTop:8,height:5,background:C.border,borderRadius:3,overflow:"hidden"}}>
+              <div style={{marginTop:8,height:7,background:C.border,borderRadius:3,overflow:"hidden"}}>
                 <div style={{width:`${Math.min(pct,100)}%`,height:"100%",background:col,borderRadius:3}}/>
               </div>
             </div>
@@ -1457,7 +1457,13 @@ export default function App(){
   const isSyncing = useRef(false);
   const stateForSync = useRef({ proyectos:[], empleados:[], registros:[], papelera:[], bonos:[] });
   const needsSync = useRef(false);
+  const syncCount = useRef(0);
+  const pendingDeletedEids = useRef([]);
   const [syncTrigger, setSyncTrigger] = useState(0);
+
+  useEffect(() => {
+    stateForSync.current = { proyectos, empleados, registros, papelera, bonos };
+  }, [proyectos, empleados, registros, papelera, bonos]);
 
   useEffect(() => {
     const intervalo = setInterval(() => {
@@ -1466,10 +1472,6 @@ export default function App(){
     }, 60000);
     return () => clearInterval(intervalo);
   }, [fechaActual]);
-
-  useEffect(() => {
-    stateForSync.current = { proyectos, empleados, registros, papelera, bonos };
-  }, [proyectos, empleados, registros, papelera, bonos]);
 
   // Cargar datos desde Supabase al montar
   useEffect(()=>{
@@ -1562,39 +1564,56 @@ export default function App(){
   useEffect(()=>{
     if(!supabase||loading) return;
     (async ()=>{
-      if(isFirstSync.current){
+      if(isFirstSync.current && syncTrigger === 0){
         isFirstSync.current = false;
         setSaving(false);
         return;
       }
+      isFirstSync.current = false;
       if(isSyncing.current) {
         needsSync.current = true;
         return;
       }
       isSyncing.current = true;
       needsSync.current = false;
+      syncCount.current += 1;
+      const esLimpieza = syncCount.current % 10 === 0;
       const { proyectos, empleados, registros, papelera, bonos } = stateForSync.current;
+      const eidsToDelete = [...pendingDeletedEids.current];
       setSaving(true);
       setSaveError("");
       try {
-        await supabase.from("proyectos").upsert(proyectos.map(toDbProyecto),{onConflict:"id"});
-        const { data: proyExist } = await supabase.from("proyectos").select("id");
-        const proyIds = new Set(proyectos.map(p => p.id));
-        for(const row of proyExist || []) {
-          if(!proyIds.has(row.id)) await supabase.from("proyectos").delete().eq("id", row.id);
+        if(eidsToDelete.length > 0) {
+          for(const eid of eidsToDelete) {
+            await supabase.from("bonos").delete().eq("eid", eid);
+            await supabase.from("registros").delete().eq("eid", eid);
+          }
         }
-        await supabase.from("empleados").upsert(empleados.map(e=>({id:e.id,nombre:e.nombre,activo:e.activo,tarifa:e.tarifa})),{onConflict:"id"});
-        const { data: empExist } = await supabase.from("empleados").select("id");
-        const empIds = new Set(empleados.map(e => e.id));
-        for(const row of empExist || []) {
-          if(!empIds.has(row.id)) await supabase.from("empleados").delete().eq("id", row.id);
+        if(proyectos.length > 0) {
+          await supabase.from("proyectos").upsert(proyectos.map(toDbProyecto),{onConflict:"id"});
         }
-        // Eliminar registros históricos de empleados que ya no existen
-        const { data: todosLosRegs } = await supabase.from("registros").select("eid");
-        const empIdsActuales = new Set(empleados.map(e => e.id));
-        for(const row of todosLosRegs || []) {
-          if(!empIdsActuales.has(row.eid)) {
-            await supabase.from("registros").delete().eq("eid", row.eid);
+        if(esLimpieza) {
+          const { data: proyExist } = await supabase.from("proyectos").select("id");
+          const proyIds = new Set(proyectos.map(p => p.id));
+          for(const row of proyExist || []) {
+            if(!proyIds.has(row.id)) await supabase.from("proyectos").delete().eq("id", row.id);
+          }
+        }
+        if(empleados.length > 0) {
+          await supabase.from("empleados").upsert(empleados.map(e=>({id:e.id,nombre:e.nombre,activo:e.activo,tarifa:e.tarifa})),{onConflict:"id"});
+        }
+        if(esLimpieza) {
+          const { data: empExist } = await supabase.from("empleados").select("id");
+          const empIds = new Set(empleados.map(e => e.id));
+          for(const row of empExist || []) {
+            if(!empIds.has(row.id)) await supabase.from("empleados").delete().eq("id", row.id);
+          }
+          const { data: todosLosRegs } = await supabase.from("registros").select("eid");
+          const empIdsActuales = new Set(empleados.map(e => e.id));
+          for(const row of todosLosRegs || []) {
+            if(!empIdsActuales.has(row.eid)) {
+              await supabase.from("registros").delete().eq("eid", row.eid);
+            }
           }
         }
         if(registros.length > 0) {
@@ -1603,31 +1622,43 @@ export default function App(){
             {onConflict:"eid,fecha"}
           );
         }
-        const { data: todosRegExist } = await supabase.from("registros").select("eid,fecha");
-        const regKeysEnState = new Set(registros.map(r => `${r.eid}__${r.fecha}`));
-        for(const row of todosRegExist || []) {
-          if(!regKeysEnState.has(`${row.eid}__${row.fecha}`)) {
-            await supabase.from("registros").delete().eq("eid", row.eid).eq("fecha", row.fecha);
+        if(esLimpieza) {
+          const { data: todosRegExist } = await supabase.from("registros").select("eid,fecha");
+          const regKeysEnState = new Set(registros.map(r => `${r.eid}__${r.fecha}`));
+          for(const row of todosRegExist || []) {
+            if(!regKeysEnState.has(`${row.eid}__${row.fecha}`)) {
+              await supabase.from("registros").delete().eq("eid", row.eid).eq("fecha", row.fecha);
+            }
           }
         }
-        if(papelera.length===0){
-          const { data: paAll }=await supabase.from("papelera").select("id");
-          for(const row of paAll||[]) await supabase.from("papelera").delete().eq("id",row.id);
-        } else {
-          const paRows=papelera.map(x=>({ proyecto_id:x.id, snapshot:{ proyecto:{ id:x.id,nombre:x.nombre,activo:x.activo,presupuesto:x.presupuesto }, registrosSnap:x.registrosSnap||[] }, deleted_at:new Date(x.deletedAt).toISOString() }));
+        if(papelera.length > 0) {
+          const paRows = papelera.map(x=>({ proyecto_id:x.id, snapshot:{ proyecto:{ id:x.id,nombre:x.nombre,activo:x.activo,presupuesto:x.presupuesto }, registrosSnap:x.registrosSnap||[] }, deleted_at:new Date(x.deletedAt).toISOString() }));
           await supabase.from("papelera").upsert(paRows,{onConflict:"proyecto_id"});
-          const { data: paExist }=await supabase.from("papelera").select("id,proyecto_id");
-          const idsInState=new Set(papelera.map(x=>x.id));
-          for(const row of paExist||[]){ if(!idsInState.has(row.proyecto_id)) await supabase.from("papelera").delete().eq("id",row.id); }
         }
-        await supabase.from("bonos").upsert(
-          bonos.map(b => ({id:b.id, eid:b.eid, pid:b.pid, monto:b.monto, concepto:b.concepto, fecha:b.fecha})),
-          {onConflict:"id"}
-        );
-        const { data: bonosExist } = await supabase.from("bonos").select("id");
-        const bonosIds = new Set(bonos.map(b => b.id));
-        for(const row of bonosExist || []) {
-          if(!bonosIds.has(row.id)) await supabase.from("bonos").delete().eq("id", row.id);
+        if(esLimpieza) {
+          const { data: paExist } = await supabase.from("papelera").select("id,proyecto_id,deleted_at");
+          const idsInState = new Set(papelera.map(x => x.id));
+          const ahoraMs = Date.now();
+          for(const row of paExist||[]) {
+            const deletedMs = row.deleted_at ? new Date(row.deleted_at).getTime() : 0;
+            const antiguedad = ahoraMs - deletedMs;
+            if(!idsInState.has(row.proyecto_id) && antiguedad > 120000) {
+              await supabase.from("papelera").delete().eq("id", row.id);
+            }
+          }
+        }
+        if(bonos.length > 0) {
+          await supabase.from("bonos").upsert(
+            bonos.map(b => ({id:b.id, eid:b.eid, pid:b.pid, monto:b.monto, concepto:b.concepto, fecha:b.fecha})),
+            {onConflict:"id"}
+          );
+        }
+        if(esLimpieza) {
+          const { data: bonosExist } = await supabase.from("bonos").select("id");
+          const bonosIds = new Set(bonos.map(b => b.id));
+          for(const row of bonosExist || []) {
+            if(!bonosIds.has(row.id)) await supabase.from("bonos").delete().eq("id", row.id);
+          }
         }
       } catch(e){
         console.warn("Error guardando en Supabase",e);
@@ -1635,6 +1666,11 @@ export default function App(){
       } finally {
         isSyncing.current = false;
         setSaving(false);
+        if(eidsToDelete.length > 0) {
+          pendingDeletedEids.current = pendingDeletedEids.current.filter(
+            eid => !eidsToDelete.includes(eid)
+          );
+        }
         if(needsSync.current) {
           needsSync.current = false;
           setSyncTrigger(t => t + 1);
@@ -1664,10 +1700,14 @@ export default function App(){
   const pendientes=empleados.filter(e=>e.activo&&!registros.find(r=>r.eid===e.id && r.fecha===hoy() && r.items?.some(it=>(Number(it.h)||0)>0)));
   const proxies=registros.filter(r=>r.llenadorId!==r.eid && r.fecha===hoy() && r.items?.some(it=>(Number(it.h)||0)>0));
 
-  if(loading) return <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Segoe UI',sans-serif",color:"#777"}}><div>Cargando...</div></div>;
+  if(loading) return <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Segoe UI',sans-serif",color:"#888"}}><div>Cargando...</div></div>;
 
-  return <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px 20px 80px",fontFamily:"'DM Sans','Segoe UI',sans-serif"}}>
+  return <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px 20px 80px",fontFamily:"'DM Sans','Segoe UI',sans-serif",lineHeight:1.5}}>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+    <style>{`
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-8px)} 40%,80%{transform:translateX(8px)} }
+  `}</style>
 
     <div style={{position:"relative"}}>
       <div style={{width:390,background:"#0F0F0F",borderRadius:44,border:"1px solid #2A2A2A",boxShadow:"0 50px 100px #000b, 0 0 0 1px #ffffff06 inset",overflow:"hidden"}}>
@@ -1678,14 +1718,15 @@ export default function App(){
           <div style={{display:"flex",gap:4,alignItems:"center"}}>
             {pendientes.length>0&&<div style={{background:"#F9731622",border:"1px solid #F9731655",borderRadius:10,padding:"2px 7px",fontSize:10,fontWeight:800,color:"#F97316"}}>⚠️{pendientes.length}</div>}
             {proxies.length>0&&<div style={{background:"#EF444422",border:"1px solid #EF444455",borderRadius:10,padding:"2px 7px",fontSize:10,fontWeight:800,color:"#EF4444"}}>👤{proxies.length}</div>}
+            {saving&&<div style={{width:6,height:6,borderRadius:"50%",background:C.accent,animation:"pulse 1s infinite"}}/>}
           </div>
         </div>
 
-        <div style={{padding:20,minHeight:580,maxHeight:700,overflowY:"auto"}}>
+        <div style={{padding:20,minHeight:580,maxHeight:700,overflowY:"auto",position:"relative"}}>
           {screen==="home"&&<PantallaInicio onSelect={ir}/>}
           {screen==="worker"&&<PantallaTrabajador proyectos={proyectos} empleados={empleados} registros={registros} onGuardar={guardarRegistro} onBack={()=>setScreen("home")} saving={saving} saveError={saveError}/>}
           {screen==="pin"&&<PantallaPIN onSuccess={()=>{setAuthed(true);setScreen("admin");}} onBack={()=>setScreen("home")}/>}
-          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} bonos={bonos} setBonos={setBonos} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)}/>}
+          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} bonos={bonos} setBonos={setBonos} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)} pendingDeletedEids={pendingDeletedEids}/>}
         </div>
 
         <div style={{height:22,background:"#1A1A1A",borderTop:"1px solid #2A2A2A",display:"flex",alignItems:"center",justifyContent:"center"}}>
