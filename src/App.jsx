@@ -3,9 +3,15 @@ import { supabase, hoy } from "./supabaseClient";
 
 // ── TEMA ─────────────────────────────────────────────────────
 const C = {
-  bg:"#0F0F0F", surface:"#1A1A1A", border:"#2A2A2A",
-  accent:"#F59E0B", text:"#F5F5F0", muted:"#888",
-  green:"#10B981", red:"#EF4444", orange:"#F97316",
+  bg:"#000000",
+  surface:"#0D0D0D",
+  border:"#1F1F1F",
+  accent:"#1438ED",
+  text:"#FFFFFF",
+  muted:"#888888",
+  green:"#10B981",
+  red:"#EF4444",
+  orange:"#F97316",
 };
 
 // ── DATOS DEMO (solo sin Supabase; en producción no se usan) ───
@@ -36,12 +42,12 @@ function Badge({label,color=C.accent}){
 }
 
 function Pill({active,onClick,children}){
-  return <button onClick={onClick} style={{background:active?C.accent:C.surface,color:active?"#000":C.muted,border:`1px solid ${active?C.accent:C.border}`,borderRadius:20,padding:"8px 18px",fontSize:14,fontWeight:active?700:400,cursor:"pointer"}}>{children}</button>;
+  return <button onClick={onClick} style={{background:active?C.accent:C.surface,color:active?"#FFFFFF":C.muted,border:`1px solid ${active?C.accent:C.border}`,borderRadius:20,padding:"8px 18px",fontSize:14,fontWeight:active?700:400,cursor:"pointer"}}>{children}</button>;
 }
 
 function Btn({onClick,children,variant="primary",full,disabled}){
   const v={
-    primary:{background:disabled?C.border:C.accent,color:disabled?C.muted:"#000",border:"none",fontWeight:800,cursor:disabled?"not-allowed":"pointer"},
+    primary:{background:disabled?C.border:C.accent,color:disabled?C.muted:"#FFFFFF",border:"none",fontWeight:800,cursor:disabled?"not-allowed":"pointer"},
     secondary:{background:"none",color:C.muted,border:`1px solid ${C.border}`,cursor:"pointer"},
     ghost:{background:C.surface,color:C.muted,border:`1px solid ${C.border}`,cursor:"pointer"},
     danger:{background:C.red+"11",color:C.red,border:`1px solid ${C.red}44`,cursor:"pointer"},
@@ -200,6 +206,30 @@ function ProyectoSelector({proyectos,selec,setSelec,horas,setHoras,extraVisibleI
 function PantallaInicio({onSelect}){
   return <div style={{display:"flex",flexDirection:"column",gap:16}}>
     <div style={{textAlign:"center",marginBottom:4}}>
+      <div style={{display:"flex",justifyContent:"center",marginBottom:16}}>
+        <svg width="64" height="58" viewBox="0 0 100 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <line x1="5" y1="8" x2="95" y2="8" stroke="#1438ED" strokeWidth="3" strokeLinecap="round"/>
+          <line x1="5" y1="18" x2="95" y2="18" stroke="#1438ED" strokeWidth="3" strokeLinecap="round"/>
+          <line x1="5" y1="28" x2="95" y2="28" stroke="#1438ED" strokeWidth="3" strokeLinecap="round"/>
+          <line x1="5" y1="38" x2="95" y2="38" stroke="#1438ED" strokeWidth="3" strokeLinecap="round"/>
+          <line x1="5" y1="48" x2="95" y2="48" stroke="#1438ED" strokeWidth="3" strokeLinecap="round"/>
+          <path d="M5  8  Q5  75 35 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M5  18 Q5  75 36 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M5  28 Q8  72 37 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M5  38 Q12 70 38 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M5  48 Q18 68 39 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M95 8  Q95 75 65 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M95 18 Q95 75 64 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M95 28 Q92 72 63 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M95 38 Q88 70 62 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M95 48 Q82 68 61 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M39 88 Q50 62 61 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M38 88 Q50 58 62 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M37 88 Q50 54 63 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M36 88 Q50 50 64 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+          <path d="M35 88 Q50 46 65 88" stroke="#1438ED" strokeWidth="3" strokeLinecap="round" fill="none"/>
+        </svg>
+      </div>
       <div style={{fontSize:11,letterSpacing:3,color:C.accent,fontWeight:700,marginBottom:8,textTransform:"uppercase"}}>Sistema de Registro</div>
       <div style={{fontSize:26,fontWeight:900,color:C.text,lineHeight:1.1}}>¿Quién eres?</div>
       <div style={{fontSize:13,color:C.muted,marginTop:6}}>Selecciona tu perfil para continuar</div>
@@ -887,7 +917,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     {/* tabs */}
     <div style={{display:"flex",gap:6,marginBottom:16}}>
       {[{id:"reporte",l:"📋 Reporte"},{id:"proyectos",l:"🏗️ Proyectos"},{id:"empleados",l:"👷 Empleados"},{id:"cierre",l:"📅 Cierre"}].map(t=>(
-        <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px",background:tab===t.id?C.accent:C.surface,border:`1px solid ${tab===t.id?C.accent:C.border}`,borderRadius:8,color:tab===t.id?"#000":C.muted,fontWeight:tab===t.id?800:400,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>
+        <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px",background:tab===t.id?C.accent:C.surface,border:`1px solid ${tab===t.id?C.accent:C.border}`,borderRadius:8,color:tab===t.id?"#FFFFFF":C.muted,fontWeight:tab===t.id?800:400,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>
       ))}
     </div>
 
@@ -1118,28 +1148,26 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         <Btn onClick={()=>{setFproy({nombre:"",activo:true,presupuesto:""});setMproy("nuevo");}}>+ Agregar</Btn>
       </div>
       {proyectos.filter(p=>p.activo).map(p=><div key={p.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-          <div style={{flex:1}}>
-            <div style={{fontSize:13,fontWeight:600,color:C.text}}>{p.nombre}</div>
-            <div style={{fontSize:11,color:C.muted,marginTop:3}}>Presupuesto: <strong style={{color:C.accent}}>{$$(p.presupuesto)}</strong></div>
-          </div>
-          <div style={{display:"flex",gap:6,flexShrink:0}}>
-            <button onClick={()=>{setFproy({nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto});setMproy(p.id);}} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 14px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️</button>
-            <button
-              onClick={()=>{
-                const tieneHoras = registros.some(reg =>
-                  (reg.items||[]).some(it => it.pid===p.id && (Number(it.h)||0) > 0)
-                );
-                if(!tieneHoras) setConfirmCerrar(p);
-                else cerrarProyecto(p);
-              }}
-              style={{background:C.orange+"11",border:`1px solid ${C.orange}44`,borderRadius:8,padding:"8px 14px",color:C.orange,fontSize:12,cursor:saving?"not-allowed":"pointer",opacity:saving?0.6:1,fontFamily:"inherit"}}
-              disabled={saving}
-            >
-              🔒 Cerrar
-            </button>
-            <button onClick={()=>setDelProy(p)} style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:8,padding:"8px 14px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🗑️</button>
-          </div>
+        <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:8}}>{p.nombre}</div>
+        <div style={{fontSize:11,color:C.muted,marginBottom:10}}>
+          Presupuesto: <strong style={{color:C.accent}}>{$$(p.presupuesto)}</strong>
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>{setFproy({nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto});setMproy(p.id);}} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 14px",color:C.muted,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>✏️ Editar</button>
+          <button
+            onClick={()=>{
+              const tieneHoras = registros.some(reg =>
+                (reg.items||[]).some(it => it.pid===p.id && (Number(it.h)||0) > 0)
+              );
+              if(!tieneHoras) setConfirmCerrar(p);
+              else cerrarProyecto(p);
+            }}
+            style={{flex:1,background:C.orange+"11",border:`1px solid ${C.orange}44`,borderRadius:8,padding:"8px 14px",color:C.orange,fontSize:12,cursor:saving?"not-allowed":"pointer",opacity:saving?0.6:1,fontFamily:"inherit"}}
+            disabled={saving}
+          >
+            🔒 Cerrar
+          </button>
+          <button onClick={()=>setDelProy(p)} style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:8,padding:"8px 14px",color:C.red,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>🗑️</button>
         </div>
       </div>)}
 
@@ -1700,9 +1728,9 @@ export default function App(){
   const pendientes=empleados.filter(e=>e.activo&&!registros.find(r=>r.eid===e.id && r.fecha===hoy() && r.items?.some(it=>(Number(it.h)||0)>0)));
   const proxies=registros.filter(r=>r.llenadorId!==r.eid && r.fecha===hoy() && r.items?.some(it=>(Number(it.h)||0)>0));
 
-  if(loading) return <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Segoe UI',sans-serif",color:"#888"}}><div>Cargando...</div></div>;
+  if(loading) return <div style={{minHeight:"100vh",background:"#000000",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Segoe UI',sans-serif",color:"#888888"}}><div>Cargando...</div></div>;
 
-  return <div style={{minHeight:"100vh",background:"#070707",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px 20px 80px",fontFamily:"'DM Sans','Segoe UI',sans-serif",lineHeight:1.5}}>
+  return <div style={{minHeight:"100vh",background:"#000000",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px 20px 80px",fontFamily:"'DM Sans','Segoe UI',sans-serif",lineHeight:1.5}}>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
     <style>{`
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
@@ -1710,9 +1738,9 @@ export default function App(){
   `}</style>
 
     <div style={{position:"relative"}}>
-      <div style={{width:390,background:"#0F0F0F",borderRadius:44,border:"1px solid #2A2A2A",boxShadow:"0 50px 100px #000b, 0 0 0 1px #ffffff06 inset",overflow:"hidden"}}>
+      <div style={{width:390,background:"#000000",borderRadius:44,border:"1px solid #1F1F1F",boxShadow:"0 50px 100px #000b, 0 0 0 1px #ffffff06 inset",overflow:"hidden"}}>
         {/* notch */}
-        <div style={{background:"#1A1A1A",height:46,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #2A2A2A",padding:"0 20px"}}>
+        <div style={{background:"#0D0D0D",height:46,display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #1F1F1F",padding:"0 20px"}}>
           <div style={{width:50}}/>
           <div style={{width:110,height:10,background:"#000",borderRadius:10}}/>
           <div style={{display:"flex",gap:4,alignItems:"center"}}>
@@ -1729,13 +1757,13 @@ export default function App(){
           {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} bonos={bonos} setBonos={setBonos} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)} pendingDeletedEids={pendingDeletedEids}/>}
         </div>
 
-        <div style={{height:22,background:"#1A1A1A",borderTop:"1px solid #2A2A2A",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{width:90,height:4,background:"#2A2A2A",borderRadius:4}}/>
+        <div style={{height:22,background:"#0D0D0D",borderTop:"1px solid #1F1F1F",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{width:90,height:4,background:"#1F1F1F",borderRadius:4}}/>
         </div>
       </div>
     </div>
 
-    <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",display:"flex",gap:8,background:"#1A1A1A",border:"1px solid #2A2A2A",borderRadius:30,padding:"8px 12px",zIndex:100}}>
+    <div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",display:"flex",gap:8,background:"#0D0D0D",border:"1px solid #1F1F1F",borderRadius:30,padding:"8px 12px",zIndex:100}}>
       <Pill active={screen==="home"} onClick={()=>setScreen("home")}>🏠 Inicio</Pill>
       <Pill active={screen==="worker"} onClick={()=>setScreen("worker")}>👷 Trabajador</Pill>
       <Pill active={screen==="admin"||screen==="pin"} onClick={()=>ir("admin")}>📊 Admin</Pill>
