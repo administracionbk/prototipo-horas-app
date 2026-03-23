@@ -63,9 +63,35 @@ function Toggle({value,onChange,opts}){
   </div>;
 }
 
-function Sheet({title,onClose,children}){
-  return <div style={{position:"fixed",inset:0,background:"#000b",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:200}} onClick={onClose}>
-    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:"20px 20px 0 0",padding:24,width:"100%",maxWidth:420,maxHeight:"88vh",overflowY:"auto",boxSizing:"border-box"}} onClick={e=>e.stopPropagation()}>
+function Sheet({title,onClose,children,variant="drawer"}){
+  const drawer = variant === "drawer";
+  return <div
+    style={{
+      position:"fixed",inset:0,background:"#000b",display:"flex",justifyContent:"center",zIndex:200,
+      alignItems: drawer ? "flex-end" : "flex-start",
+      paddingTop: drawer ? 0 : "min(10vh, 72px)",
+      paddingBottom: drawer ? 0 : 20,
+      paddingLeft: drawer ? 0 : 16,
+      paddingRight: drawer ? 0 : 16,
+      boxSizing:"border-box",
+    }}
+    onClick={onClose}
+  >
+    <div
+      style={{
+        background:C.surface,
+        border:`1px solid ${C.border}`,
+        borderRadius: drawer ? "20px 20px 0 0" : 16,
+        padding:24,
+        width:"100%",
+        maxWidth:420,
+        maxHeight: drawer ? "88vh" : "min(82vh, calc(100vh - min(10vh, 72px) - 28px))",
+        overflowY:"auto",
+        WebkitOverflowScrolling:"touch",
+        boxSizing:"border-box",
+      }}
+      onClick={e=>e.stopPropagation()}
+    >
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
         <span style={{fontSize:16,fontWeight:800,color:C.text}}>{title}</span>
         <button onClick={onClose} style={{background:"none",border:"none",color:C.muted,fontSize:24,cursor:"pointer",lineHeight:1,padding:0}}>×</button>
@@ -1037,7 +1063,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           </div>
         </div>
       </Sheet>}
-      {mHistorico && <Sheet title="Registrar horas en fecha pasada" onClose={()=>setMHistorico(false)}>
+      {mHistorico && <Sheet variant="modal" title="Registrar horas en fecha pasada" onClose={()=>setMHistorico(false)}>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div>
             <div style={{fontSize:12,color:C.muted,marginBottom:6}}>Trabajador</div>
