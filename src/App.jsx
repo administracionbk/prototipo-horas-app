@@ -506,7 +506,7 @@ function DiaHistorial({fecha, items, totalDia, costoDia, proyectos, emp}){
 }
 
 // ── PANEL ADMIN ───────────────────────────────────────────────
-function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,onBack,saving,saveError,onDataChanged}){
+function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,bonos,setBonos,onBack,saving,saveError,onDataChanged}){
   const [tab,setTab]=useState("reporte");
 
   // Proyectos
@@ -525,10 +525,14 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const [empHistorial,setEmpHistorial] = useState(null);
   const [errPresupuesto,setErrPresupuesto]=useState("");
   const [errTarifa,setErrTarifa]=useState("");
+  const [mBono, setMBono] = useState(false);
+  const [fBono, setFBono] = useState({eid:"", pid:"", monto:"", concepto:""});
+  const [errBono, setErrBono] = useState("");
 
   const eliminarEmpleadoConRegistros = (emp) => {
     if(!emp) return;
     setRegistros(prev=>prev.filter(r=>r.eid!==emp.id));
+    setBonos(prev=>prev.filter(b=>b.eid!==emp.id));
     setEmpleados(prev=>prev.filter(x=>x.id!==emp.id));
     setDelEmp(null);
     onDataChanged();
@@ -600,7 +604,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       acc[row.eid].costo += row.costo;
       return acc;
     }, {}));
-    const gastoReal = rowsAgrupadas.reduce((a,b) => a+b.costo, 0);
+    const bonosDelProyecto = bonos.filter(b => b.pid === p.id).reduce((a,b) => a + b.monto, 0);
+    const gastoReal = rowsAgrupadas.reduce((a,b) => a+b.costo, 0) + bonosDelProyecto;
     const horas     = rowsAgrupadas.reduce((a,b) => a+b.horas, 0);
     const mes = new Date().toLocaleDateString("es-MX",{month:"long",year:"numeric"});
     const cerradoEn = mes.charAt(0).toUpperCase()+mes.slice(1);
@@ -680,6 +685,23 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     onDataChanged();
   };
 
+  const guardarBono = () => {
+    if(!fBono.eid || !fBono.pid) { setErrBono("Selecciona trabajador y proyecto"); return; }
+    const montoNum = Number(fBono.monto)||0;
+    if(montoNum <= 0) { setErrBono("El monto debe ser mayor a $0"); return; }
+    const id = (typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():String(Date.now()));
+    setBonos(prev => [{id, eid:fBono.eid, pid:fBono.pid, monto:montoNum, concepto:fBono.concepto.trim()||"Bono", fecha:hoy()}, ...prev]);
+    setMBono(false);
+    setFBono({eid:"", pid:"", monto:"", concepto:""});
+    setErrBono("");
+    onDataChanged();
+  };
+
+  const eliminarBono = (id) => {
+    setBonos(prev => prev.filter(b => b.id !== id));
+    onDataChanged();
+  };
+
   // ── cálculos
   const [vistaReporte,setVistaReporte] = useState("hoy");
   const hoyStr = hoy();
@@ -711,8 +733,13 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       : rows;
     const totalH=rowsFinales.reduce((a,b)=>a+b.h,0);
     const totalC=rowsFinales.reduce((a,b)=>a+b.costo,0);
-    const pct=p.presupuesto?Math.round((totalC/p.presupuesto)*100):0;
-    return{...p,rows:rowsFinales,totalH,totalC,pct};
+    const bonosProyecto = (vistaReporte === "hoy"
+      ? bonos.filter(b => b.pid === p.id && b.fecha === hoyStr)
+      : bonos.filter(b => b.pid === p.id)
+    ).reduce((a,b) => a + b.monto, 0);
+    const totalCConBonos = totalC + bonosProyecto;
+    const pct = p.presupuesto ? Math.round((totalCConBonos/p.presupuesto)*100) : 0;
+    return{...p,rows:rowsFinales,totalH,totalC:totalCConBonos,pct,bonosProyecto};
   });
 
   const totalHorasDia=registrosVista.reduce((a,r)=>a+r.items.reduce((b,x)=>b+x.h,0),0);
@@ -720,6 +747,11 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     const e=empleados.find(x=>x.id===r.eid);
     return a+r.items.reduce((b,x)=>b+(x.h*(e?.tarifa||0)),0);
   },0);
+  const proyectosActivosIds = new Set(proyectos.filter(p => p.activo).map(p => p.id));
+  const totalBonosDia = (vistaReporte === "hoy"
+    ? bonos.filter(b => b.fecha === hoyStr && proyectosActivosIds.has(b.pid))
+    : bonos.filter(b => proyectosActivosIds.has(b.pid))
+  ).reduce((a,b) => a + b.monto, 0);
 
   if(empHistorial) {
     const emp = empleados.find(e => e.id === empHistorial.id) || empHistorial;
@@ -746,6 +778,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
     const totalHoras = diasConRegistro.reduce((a,d) => a + d.items.reduce((b,it) => b+(Number(it.h)||0), 0), 0);
     const totalCosto = diasConRegistro.reduce((a,d) => a + d.items.reduce((b,it) => b+(Number(it.h)||0)*emp.tarifa, 0), 0);
+    const totalBonos45 = bonos.filter(b => b.eid === emp.id && dias.includes(b.fecha)).reduce((a,b) => a+b.monto, 0);
 
     return <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -757,14 +790,18 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         <div style={{width:36,height:36,borderRadius:"50%",background:C.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,color:C.accent,fontWeight:900}}>{emp.nombre[0]}</div>
       </div>
 
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
           <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{formatHoras(totalHoras)}</div>
           <div style={{fontSize:10,color:C.muted,marginTop:2}}>Horas totales (45 días)</div>
         </div>
         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
-          <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{$$(totalCosto)}</div>
+          <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{$$(totalCosto + totalBonos45)}</div>
           <div style={{fontSize:10,color:C.muted,marginTop:2}}>Costo total (45 días)</div>
+        </div>
+        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
+          <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{$$(totalBonos45)}</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:2}}>Bonos (45 días)</div>
         </div>
       </div>
 
@@ -840,7 +877,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         {[
           {l:vistaReporte==="hoy"?"Horas registradas":"Total horas",v:formatHoras(totalHorasDia),c:C.accent},
-          {l:vistaReporte==="hoy"?"Costo M.O. hoy":"Costo M.O. total",v:$$(totalCostoDia),c:C.accent},
+          {l:vistaReporte==="hoy"?"Costo M.O. hoy":"Costo M.O. total",v:$$(totalCostoDia + totalBonosDia),c:C.accent},
           {l:"Proyectos activos",v:String(proyectos.filter(p=>p.activo).length),c:C.green},
           {l:"Sin registrar",v:String(pendientes.length),c:pendientes.length>0?C.orange:C.green},
         ].map(k=><div key={k.l} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
@@ -849,14 +886,17 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         </div>)}
       </div>
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:4,gap:8}}>
         <div style={{fontSize:11,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontWeight:700}}>Desglose por proyecto</div>
-        <div style={{width:190}}>
-          <Toggle
-            value={vistaReporte}
-            onChange={setVistaReporte}
-            opts={[{v:"hoy",l:"📅 Hoy"},{v:"acumulado",l:"📊 Acumulado"}]}
-          />
+        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+          <Btn onClick={()=>{setFBono({eid:"",pid:"",monto:"",concepto:""});setMBono(true);}} variant="ghost">+ Bono</Btn>
+          <div style={{width:190}}>
+            <Toggle
+              value={vistaReporte}
+              onChange={setVistaReporte}
+              opts={[{v:"hoy",l:"📅 Hoy"},{v:"acumulado",l:"📊 Acumulado"}]}
+            />
+          </div>
         </div>
       </div>
 
@@ -896,6 +936,26 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
               Sin registros {vistaReporte === "hoy" ? "hoy" : "acumulados"}
             </div>
           }
+          {(()=>{
+            const bonosDelProy = (vistaReporte === "hoy"
+              ? bonos.filter(b => b.pid === item.id && b.fecha === hoyStr)
+              : bonos.filter(b => b.pid === item.id)
+            );
+            if(bonosDelProy.length === 0) return null;
+            return bonosDelProy.map(b => {
+              const empB = empleados.find(e => e.id === b.eid);
+              return <div key={b.id} style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`,background:C.accent+"05",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div>
+                  <div style={{fontSize:11,color:C.accent,fontWeight:700}}>🎯 {b.concepto}</div>
+                  <div style={{fontSize:11,color:C.muted}}>{empB?.nombre}</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:12,fontWeight:700,color:C.accent}}>{$$(b.monto)}</span>
+                  <button onClick={()=>eliminarBono(b.id)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:12,padding:"2px 4px"}}>×</button>
+                </div>
+              </div>;
+            });
+          })()}
           <div style={{padding:"8px 14px",background:over?C.red+"11":C.accent+"08",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span style={{fontSize:11,color:C.muted,fontWeight:700}}>{vistaReporte==="hoy"?"TOTAL HOY":"TOTAL ACUMULADO"}</span>
             <span style={{fontSize:13,fontWeight:900,color:col}}>{formatHoras(item.totalH)} <span style={{fontSize:11,color:C.muted,fontWeight:400}}>{$$(item.totalC)}</span></span>
@@ -927,6 +987,33 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       })()}
 
       {/* Botón de exportar eliminado según requerimiento */}
+      {mBono && <Sheet title="Registrar bono / pago extra" onClose={()=>setMBono(false)}>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:6}}>Trabajador</div>
+            <select value={fBono.eid} onChange={e=>setFBono(f=>({...f,eid:e.target.value}))}
+              style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",color:fBono.eid?C.text:C.muted,fontSize:14,outline:"none",fontFamily:"inherit"}}>
+              <option value="">Seleccionar trabajador...</option>
+              {empleados.filter(e=>e.activo).map(e=><option key={e.id} value={e.id}>{e.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:6}}>Proyecto</div>
+            <select value={fBono.pid} onChange={e=>setFBono(f=>({...f,pid:e.target.value}))}
+              style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",color:fBono.pid?C.text:C.muted,fontSize:14,outline:"none",fontFamily:"inherit"}}>
+              <option value="">Seleccionar proyecto...</option>
+              {proyectos.filter(p=>p.activo).map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+            </select>
+          </div>
+          <Field label="Monto ($)" value={String(fBono.monto)} onChange={e=>setFBono(f=>({...f,monto:e.target.value}))} placeholder="Ej. 500" type="number"/>
+          <Field label="Concepto (opcional)" value={fBono.concepto} onChange={e=>setFBono(f=>({...f,concepto:e.target.value}))} placeholder="Ej. Horas extra, bono fin de semana..."/>
+          {errBono && <div style={{fontSize:12,color:C.red}}>{errBono}</div>}
+          <div style={{display:"flex",gap:8}}>
+            <Btn onClick={()=>setMBono(false)} variant="secondary" full>Cancelar</Btn>
+            <Btn onClick={guardarBono} full>Guardar bono</Btn>
+          </div>
+        </div>
+      </Sheet>}
     </div>}
 
     {/* ── TAB PROYECTOS ── */}
@@ -1025,7 +1112,12 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       />}
       {delPerm2&&<Confirm
         msg={`Esta acción es IRREVERSIBLE.\nSe eliminará "${delPerm2.nombre}" y sus registros asociados.`}
-        onOk={()=>{setPapelera(prev=>prev.filter(x=>x.id!==delPerm2.id));setDelPerm2(null);onDataChanged();}}
+        onOk={()=>{
+          setBonos(prev=>prev.filter(b=>b.pid!==delPerm2.id));
+          setPapelera(prev=>prev.filter(x=>x.id!==delPerm2.id));
+          setDelPerm2(null);
+          onDataChanged();
+        }}
         onCancel={()=>setDelPerm2(null)}
       />}
       {confirmCerrar&&<Confirm
@@ -1172,6 +1264,26 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                 ))}
               </div>
             )}
+            {(()=>{
+              const bonosCierre = bonos.filter(b => b.pid === item.id);
+              if(bonosCierre.length === 0) return null;
+              return <div style={{borderTop:`1px solid ${C.border}`,padding:"8px 14px"}}>
+                <div style={{fontSize:11,color:C.accent,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>Bonos</div>
+                {bonosCierre.map(b => {
+                  const empB = empleados.find(e => e.id === b.eid);
+                  return <div key={b.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:24,height:24,borderRadius:"50%",background:C.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:C.accent,fontWeight:700,flexShrink:0}}>🎯</div>
+                      <div>
+                        <div style={{fontSize:12,color:C.muted}}>{b.concepto}</div>
+                        <div style={{fontSize:11,color:C.muted}}>{empB?.nombre}</div>
+                      </div>
+                    </div>
+                    <div style={{fontSize:12,fontWeight:700,color:C.accent}}>{$$(b.monto)}</div>
+                  </div>;
+                })}
+              </div>;
+            })()}
             <div style={{padding:"8px 14px",borderTop:`1px solid ${C.border}`,background:over?C.red+"08":C.green+"08",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <span style={{fontSize:11,color:C.muted,fontWeight:700}}>{over?"SOBRECOSTO":"AHORRO"} </span>
@@ -1241,13 +1353,14 @@ export default function App(){
   const [empleados,setEmpleados]=useState([]);
   const [registros,setRegistros]=useState([]);
   const [papelera,setPapelera]=useState([]);
+  const [bonos, setBonos] = useState([]);
   const [saving,setSaving]=useState(false);
   const [saveError,setSaveError]=useState("");
   const [fechaActual, setFechaActual] = useState(hoy());
 
   const isFirstSync = useRef(true);
   const isSyncing = useRef(false);
-  const stateForSync = useRef({ proyectos:[], empleados:[], registros:[], papelera:[] });
+  const stateForSync = useRef({ proyectos:[], empleados:[], registros:[], papelera:[], bonos:[] });
   const needsSync = useRef(false);
   const [syncTrigger, setSyncTrigger] = useState(0);
 
@@ -1260,24 +1373,26 @@ export default function App(){
   }, [fechaActual]);
 
   useEffect(() => {
-    stateForSync.current = { proyectos, empleados, registros, papelera };
-  }, [proyectos, empleados, registros, papelera]);
+    stateForSync.current = { proyectos, empleados, registros, papelera, bonos };
+  }, [proyectos, empleados, registros, papelera, bonos]);
 
   // Cargar datos desde Supabase al montar
   useEffect(()=>{
     if(!supabase){ setLoading(false); return; }
     (async ()=>{
       try {
-        const [pr,em,re,pa]=await Promise.all([
+        const [pr,em,re,pa,bo]=await Promise.all([
           supabase.from("proyectos").select("*").order("nombre"),
           supabase.from("empleados").select("*").order("nombre"),
           supabase.from("registros").select("*"),
           supabase.from("papelera").select("*").order("deleted_at",{ascending:false}),
+          supabase.from("bonos").select("*").order("fecha",{ascending:false}),
         ]);
         if(pr.data?.length) setProyectos(pr.data.map(fromDbProyecto).filter(Boolean));
         if(em.data?.length) setEmpleados(em.data.map(r=>({id:r.id,nombre:r.nombre,activo:r.activo,tarifa:r.tarifa})));
         if(re.data?.length) setRegistros(re.data.map(fromDbRegistro).filter(Boolean));
         if(pa.data?.length) setPapelera(pa.data.map(r=>{ const s=r.snapshot||{}; const p=s.proyecto||{}; return { id:p.id||r.proyecto_id,nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto,deletedAt:new Date(r.deleted_at).getTime(),registrosSnap:s.registrosSnap||[] }; }));
+        if(bo.data?.length) setBonos(bo.data.map(r=>({id:r.id,eid:r.eid,pid:r.pid,monto:r.monto,concepto:r.concepto,fecha:r.fecha})));
       } catch(e){ console.warn("Error cargando Supabase",e); }
       setLoading(false);
     })();
@@ -1328,9 +1443,22 @@ export default function App(){
           }
         }
       )
-      .subscribe((status) => {
-        console.log("Realtime status:", status);
-      });
+      .on("postgres_changes", { event: "*", schema: "public", table: "bonos" },
+        payload => {
+          if(payload.eventType === "DELETE") {
+            setBonos(prev => prev.filter(b => b.id !== payload.old.id));
+          } else {
+            const n = payload.new;
+            const bono = {id:n.id,eid:n.eid,pid:n.pid,monto:n.monto,concepto:n.concepto,fecha:n.fecha};
+            setBonos(prev => {
+              const existe = prev.find(b => b.id === bono.id);
+              if(existe) return prev.map(b => b.id === bono.id ? bono : b);
+              return [bono, ...prev];
+            });
+          }
+        }
+      )
+      .subscribe();
 
     return () => { supabase.removeChannel(canal); };
   },[]);
@@ -1350,7 +1478,7 @@ export default function App(){
       }
       isSyncing.current = true;
       needsSync.current = false;
-      const { proyectos, empleados, registros, papelera } = stateForSync.current;
+      const { proyectos, empleados, registros, papelera, bonos } = stateForSync.current;
       setSaving(true);
       setSaveError("");
       try {
@@ -1396,6 +1524,15 @@ export default function App(){
           const { data: paExist }=await supabase.from("papelera").select("id,proyecto_id");
           const idsInState=new Set(papelera.map(x=>x.id));
           for(const row of paExist||[]){ if(!idsInState.has(row.proyecto_id)) await supabase.from("papelera").delete().eq("id",row.id); }
+        }
+        await supabase.from("bonos").upsert(
+          bonos.map(b => ({id:b.id, eid:b.eid, pid:b.pid, monto:b.monto, concepto:b.concepto, fecha:b.fecha})),
+          {onConflict:"id"}
+        );
+        const { data: bonosExist } = await supabase.from("bonos").select("id");
+        const bonosIds = new Set(bonos.map(b => b.id));
+        for(const row of bonosExist || []) {
+          if(!bonosIds.has(row.id)) await supabase.from("bonos").delete().eq("id", row.id);
         }
       } catch(e){
         console.warn("Error guardando en Supabase",e);
@@ -1453,7 +1590,7 @@ export default function App(){
           {screen==="home"&&<PantallaInicio onSelect={ir}/>}
           {screen==="worker"&&<PantallaTrabajador proyectos={proyectos} empleados={empleados} registros={registros} onGuardar={guardarRegistro} onBack={()=>setScreen("home")} saving={saving} saveError={saveError}/>}
           {screen==="pin"&&<PantallaPIN onSuccess={()=>{setAuthed(true);setScreen("admin");}} onBack={()=>setScreen("home")}/>}
-          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)}/>}
+          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} bonos={bonos} setBonos={setBonos} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)}/>}
         </div>
 
         <div style={{height:22,background:"#1A1A1A",borderTop:"1px solid #2A2A2A",display:"flex",alignItems:"center",justifyContent:"center"}}>

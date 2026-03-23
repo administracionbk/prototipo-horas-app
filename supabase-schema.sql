@@ -39,16 +39,28 @@ create table if not exists papelera (
   deleted_at timestamptz not null default now()
 );
 
+-- Bonos / pagos extra por trabajador y proyecto
+create table if not exists bonos (
+  id uuid primary key default gen_random_uuid(),
+  eid uuid not null references empleados(id) on delete cascade,
+  pid uuid not null references proyectos(id) on delete cascade,
+  monto numeric not null,
+  concepto text,
+  fecha date not null default current_date
+);
+
 -- Permitir que el cliente anónimo lea y escriba (ajusta RLS después si quieres auth)
 alter table proyectos enable row level security;
 alter table empleados enable row level security;
 alter table registros enable row level security;
 alter table papelera enable row level security;
+alter table bonos enable row level security;
 
 create policy "Allow all for proyectos" on proyectos for all using (true) with check (true);
 create policy "Allow all for empleados" on empleados for all using (true) with check (true);
 create policy "Allow all for registros" on registros for all using (true) with check (true);
 create policy "Allow all for papelera" on papelera for all using (true) with check (true);
+create policy "Allow all for bonos" on bonos for all using (true) with check (true);
 
 -- Si la tabla proyectos ya existía, agregar columnas para closed_at y trabajadores_snap
 alter table proyectos add column if not exists closed_at timestamptz;
