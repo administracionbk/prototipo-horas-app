@@ -563,7 +563,7 @@ function DiaHistorial({fecha, items, totalDia, costoDia, proyectos, emp, onElimi
 }
 
 // ── PANEL ADMIN ───────────────────────────────────────────────
-function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,bonos,setBonos,onBack,saving,saveError,onDataChanged,pendingDeletedEids}){
+function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,bonos,setBonos,onBack,saving,saveError,onDataChanged,pendingDeletedEids,pendingDeletedRegs}){
   const [tab,setTab]=useState("reporte");
 
   // Proyectos
@@ -911,6 +911,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         msg={`¿Eliminar el registro del ${confirmDelDia.fechaLabel} de ${emp.nombre}? Esta acción no se puede deshacer.`}
         okLabel="Eliminar registro"
         onOk={()=>{
+          pendingDeletedRegs.current = [...pendingDeletedRegs.current, {eid: emp.id, fecha: confirmDelDia.fecha}];
           setRegistros(prev => prev.filter(r => !(r.eid === emp.id && r.fecha === confirmDelDia.fecha)));
           setConfirmDelDia(null);
           setTimeout(() => onDataChanged(), 0);
@@ -1513,6 +1514,7 @@ export default function App(){
   const needsSync = useRef(false);
   const syncCount = useRef(0);
   const pendingDeletedEids = useRef([]);
+  const pendingDeletedRegs = useRef([]);
   const [syncTrigger, setSyncTrigger] = useState(0);
 
   useEffect(() => {
@@ -1634,6 +1636,7 @@ export default function App(){
       const esLimpieza = syncCount.current % 10 === 0;
       const { proyectos, empleados, registros, papelera, bonos } = stateForSync.current;
       const eidsToDelete = [...pendingDeletedEids.current];
+      const regsToDelete = [...pendingDeletedRegs.current];
       setSaving(true);
       setSaveError("");
       try {
@@ -1641,6 +1644,11 @@ export default function App(){
           for(const eid of eidsToDelete) {
             await supabase.from("bonos").delete().eq("eid", eid);
             await supabase.from("registros").delete().eq("eid", eid);
+          }
+        }
+        if(regsToDelete.length > 0) {
+          for(const reg of regsToDelete) {
+            await supabase.from("registros").delete().eq("eid", reg.eid).eq("fecha", reg.fecha);
           }
         }
         if(proyectos.length > 0) {
@@ -1725,6 +1733,11 @@ export default function App(){
             eid => !eidsToDelete.includes(eid)
           );
         }
+        if(regsToDelete.length > 0) {
+          pendingDeletedRegs.current = pendingDeletedRegs.current.filter(
+            reg => !regsToDelete.some(r => r.eid === reg.eid && r.fecha === reg.fecha)
+          );
+        }
         if(needsSync.current) {
           needsSync.current = false;
           setSyncTrigger(t => t + 1);
@@ -1780,7 +1793,7 @@ export default function App(){
           {screen==="home"&&<PantallaInicio onSelect={ir}/>}
           {screen==="worker"&&<PantallaTrabajador proyectos={proyectos} empleados={empleados} registros={registros} onGuardar={guardarRegistro} onBack={()=>setScreen("home")} saving={saving} saveError={saveError}/>}
           {screen==="pin"&&<PantallaPIN onSuccess={()=>{setAuthed(true);setScreen("admin");}} onBack={()=>setScreen("home")}/>}
-          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} bonos={bonos} setBonos={setBonos} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)} pendingDeletedEids={pendingDeletedEids}/>}
+          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} bonos={bonos} setBonos={setBonos} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)} pendingDeletedEids={pendingDeletedEids} pendingDeletedRegs={pendingDeletedRegs}/>}
         </div>
 
         <div style={{height:22,background:"#0D0D0D",borderTop:"1px solid #1F1F1F",display:"flex",alignItems:"center",justifyContent:"center"}}>
