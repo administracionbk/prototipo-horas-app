@@ -524,13 +524,13 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
   );
 }
 
-function DiaHistorial({fecha, items, totalDia, costoDia, proyectos, emp}){
+function DiaHistorial({fecha, items, totalDia, costoDia, proyectos, emp, onEliminar}){
   const [abierto, setAbierto] = useState(false);
   const completo = Math.abs(totalDia - 8) < 1e-6;
   const excede = totalDia > 8;
   const col = excede ? C.red : completo ? C.green : C.orange;
   return <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
-    <div onClick={()=>setAbierto(a=>!a)} style={{padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+    <div onClick={()=>setAbierto(a=>!a)} style={{padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
       <div>
         <div style={{fontSize:13,fontWeight:700,color:C.text}}>{fecha}</div>
         <div style={{fontSize:11,color:C.muted,marginTop:2}}>{items.length} proyecto{items.length!==1?"s":""}</div>
@@ -540,6 +540,12 @@ function DiaHistorial({fecha, items, totalDia, costoDia, proyectos, emp}){
           <div style={{fontSize:14,fontWeight:900,color:col}}>{formatHoras(totalDia)}</div>
           <div style={{fontSize:11,color:C.muted}}>{$$(costoDia)}</div>
         </div>
+        {onEliminar && (
+          <button
+            onClick={e=>{e.stopPropagation();onEliminar();}}
+            style={{background:C.red+"11",border:`1px solid ${C.red}44`,borderRadius:6,padding:"4px 8px",color:C.red,fontSize:11,cursor:"pointer",fontFamily:"inherit",flexShrink:0}}
+          >🗑️</button>
+        )}
         <span style={{color:C.muted,fontSize:14,transition:"transform 0.2s",display:"inline-block",transform:abierto?"rotate(90deg)":"none"}}>›</span>
       </div>
     </div>
@@ -582,6 +588,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const [mHistorico, setMHistorico] = useState(false);
   const [fHist, setFHist] = useState({eid:"", fecha:"", selec:[], horas:{}});
   const [errHist, setErrHist] = useState("");
+  const [confirmDelDia, setConfirmDelDia] = useState(null); // {fecha, fechaLabel}
 
   const eliminarEmpleadoConRegistros = (emp) => {
     if(!emp) return;
@@ -889,8 +896,27 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       {diasConRegistro.map(({fecha, items}) => {
         const totalDia = items.reduce((a,it) => a+(Number(it.h)||0), 0);
         const costoDia = totalDia * emp.tarifa;
-        return <DiaHistorial key={fecha} fecha={formatFecha(fecha)} items={items} totalDia={totalDia} costoDia={costoDia} proyectos={proyectos} emp={emp}/>;
+        return <DiaHistorial
+          key={fecha}
+          fecha={formatFecha(fecha)}
+          items={items}
+          totalDia={totalDia}
+          costoDia={costoDia}
+          proyectos={proyectos}
+          emp={emp}
+          onEliminar={()=>setConfirmDelDia({fecha, fechaLabel:formatFecha(fecha)})}
+        />;
       })}
+      {confirmDelDia && <Confirm
+        msg={`¿Eliminar el registro del ${confirmDelDia.fechaLabel} de ${emp.nombre}? Esta acción no se puede deshacer.`}
+        okLabel="Eliminar registro"
+        onOk={()=>{
+          setRegistros(prev => prev.filter(r => !(r.eid === emp.id && r.fecha === confirmDelDia.fecha)));
+          setConfirmDelDia(null);
+          setTimeout(() => onDataChanged(), 0);
+        }}
+        onCancel={()=>setConfirmDelDia(null)}
+      />}
     </div>;
   }
 
