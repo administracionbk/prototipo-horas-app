@@ -589,6 +589,8 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const [fHist, setFHist] = useState({eid:"", fecha:"", selec:[], horas:{}});
   const [errHist, setErrHist] = useState("");
   const [confirmDelDia, setConfirmDelDia] = useState(null); // {fecha, fechaLabel}
+  const [busquedaReporte, setBusquedaReporte] = useState("");
+  const [busquedaCierre, setBusquedaCierre] = useState("");
 
   const eliminarEmpleadoConRegistros = (emp) => {
     if(!emp) return;
@@ -605,14 +607,9 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const [cHoras,setCHoras]=useState({});
 
   // Papelera: purgar expirados (>30 días) en efecto, no en render
-  const DIAS = 90;
+  const DIAS = Infinity;
   const ahora = Date.now();
-  const papeleraVigente = papelera.filter(x => ahora - x.deletedAt < DIAS * 864e5);
-  useEffect(()=>{
-    const ahora = Date.now();
-    const papeleraVigente = papelera.filter(x => ahora - x.deletedAt < DIAS * 864e5);
-    if(papeleraVigente.length !== papelera.length) setPapelera(papeleraVigente);
-  },[papelera]);
+  const papeleraVigente = papelera;
 
   // Mover proyecto a papelera (guarda snapshot de sus registros)
   const moverAPapelera = (p) => {
@@ -784,7 +781,11 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
   // ── cálculos
   const [vistaReporte,setVistaReporte] = useState("hoy");
-  useEffect(() => { setVistaReporte("hoy"); }, [tab]);
+  useEffect(() => {
+    setVistaReporte("hoy");
+    setBusquedaReporte("");
+    setBusquedaCierre("");
+  }, [tab]);
   const hoyStr = hoy();
   const activos=empleados.filter(e=>e.activo);
   const pendientes=activos.filter(e=>!registros.find(r=>r.eid===e.id && r.fecha===hoyStr && r.items?.some(it=>(Number(it.h)||0)>0)));
@@ -823,6 +824,12 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     return{...p,rows:rowsFinales,totalH,totalC:totalCConBonos,pct,bonosProyecto};
   });
 
+  const reporteFiltrado = busquedaReporte.trim() === ""
+    ? reporte
+    : reporte.filter(item =>
+        item.nombre.toLowerCase().includes(busquedaReporte.toLowerCase())
+      );
+
   const totalHorasDia=registrosVista.reduce((a,r)=>a+r.items.reduce((b,x)=>b+x.h,0),0);
   const totalCostoDia=registrosVista.reduce((a,r)=>{
     const e=empleados.find(x=>x.id===r.eid);
@@ -836,20 +843,12 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
   if(empHistorial) {
     const emp = empleados.find(e => e.id === empHistorial.id) || empHistorial;
-    const hoy45 = new Date();
-    const dias = Array.from({length:90}, (_,i) => {
-      const d = new Date(hoy45);
-      d.setDate(d.getDate() - i);
-      const y = d.getFullYear();
-      const m = String(d.getMonth()+1).padStart(2,'0');
-      const day = String(d.getDate()).padStart(2,'0');
-      return `${y}-${m}-${day}`;
-    });
-    const diasConRegistro = dias.map(fecha => {
-      const reg = registros.find(r => r.eid === emp.id && r.fecha === fecha);
-      const items = reg?.items?.filter(it => (Number(it.h)||0) > 0) || [];
-      return { fecha, items };
-    }).filter(d => d.items.length > 0);
+    const diasConRegistro = registros
+      .filter(r => r.eid === emp.id && r.items?.some(it => (Number(it.h)||0) > 0))
+      .map(r => ({ fecha: r.fecha, items: r.items.filter(it => (Number(it.h)||0) > 0) }))
+      .sort((a, b) => b.fecha.localeCompare(a.fecha));
+
+    const dias = diasConRegistro.map(d => d.fecha);
 
     const formatFecha = f => {
       const [y,m,d] = f.split("-");
@@ -859,7 +858,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
     const totalHoras = diasConRegistro.reduce((a,d) => a + d.items.reduce((b,it) => b+(Number(it.h)||0), 0), 0);
     const totalCosto = diasConRegistro.reduce((a,d) => a + d.items.reduce((b,it) => b+(Number(it.h)||0)*emp.tarifa, 0), 0);
-    const totalBonos90 = bonos.filter(b => b.eid === emp.id && dias.includes(b.fecha)).reduce((a,b) => a+b.monto, 0);
+    const totalBonosTotal = bonos.filter(b => b.eid === emp.id).reduce((a,b) => a+b.monto, 0);
 
     return <div style={{display:"flex",flexDirection:"column",gap:14}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -874,22 +873,22 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
           <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{formatHoras(totalHoras)}</div>
-          <div style={{fontSize:10,color:C.muted,marginTop:2}}>Horas totales (90 días)</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:2}}>Horas totales</div>
         </div>
         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
-          <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{$$(totalCosto + totalBonos90)}</div>
-          <div style={{fontSize:10,color:C.muted,marginTop:2}}>Costo total (90 días)</div>
+          <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{$$(totalCosto + totalBonosTotal)}</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:2}}>Costo total</div>
         </div>
         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 10px",textAlign:"center"}}>
-          <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{$$(totalBonos90)}</div>
-          <div style={{fontSize:10,color:C.muted,marginTop:2}}>Bonos (90 días)</div>
+          <div style={{fontSize:20,fontWeight:900,color:C.accent}}>{$$(totalBonosTotal)}</div>
+          <div style={{fontSize:10,color:C.muted,marginTop:2}}>Bonos totales</div>
         </div>
       </div>
 
       {diasConRegistro.length === 0 && (
         <div style={{textAlign:"center",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:32}}>
           <div style={{fontSize:32,marginBottom:16}}>📋</div>
-          <div style={{fontSize:14,color:C.muted,lineHeight:1.5}}>Sin registros en los últimos 90 días.</div>
+          <div style={{fontSize:14,color:C.muted,lineHeight:1.5}}>Sin registros históricos.</div>
         </div>
       )}
 
@@ -990,8 +989,42 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         </div>)}
       </div>
 
+      <div style={{position:"relative"}}>
+        <input
+          value={busquedaReporte}
+          onChange={e => setBusquedaReporte(e.target.value)}
+          placeholder="Buscar proyecto..."
+          style={{
+            width:"100%",
+            background:C.surface,
+            border:`1px solid ${C.border}`,
+            borderRadius:8,
+            padding:"10px 36px 10px 14px",
+            color:C.text,
+            fontSize:13,
+            outline:"none",
+            boxSizing:"border-box",
+            fontFamily:"inherit"
+          }}
+        />
+        {busquedaReporte && (
+          <button
+            onClick={()=>setBusquedaReporte("")}
+            style={{
+              position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+              background:"none",border:"none",color:C.muted,cursor:"pointer",
+              fontSize:16,padding:0,lineHeight:1
+            }}
+          >×</button>
+        )}
+      </div>
+
       <div style={{display:"flex",flexDirection:"column",gap:10,marginTop:4}}>
-        <div style={{fontSize:11,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontWeight:700}}>Desglose por proyecto</div>
+        <div style={{fontSize:11,color:C.muted,letterSpacing:2,textTransform:"uppercase",fontWeight:700}}>
+    {busquedaReporte.trim() !== ""
+      ? `${reporteFiltrado.length} resultado${reporteFiltrado.length!==1?"s":""}`
+      : "Desglose por proyecto"}
+  </div>
         <div style={{display:"flex",flexWrap:"wrap",alignItems:"stretch",gap:8}}>
           <Btn onClick={()=>{setFBono({eid:"",pid:"",monto:"",concepto:""});setErrBono("");setMBono(true);}} variant="ghost">+ Bono</Btn>
           <Btn onClick={()=>{setFHist({eid:"",fecha:"",selec:[],horas:{}});setErrHist("");setMHistorico(true);}} variant="ghost">+ Histórico</Btn>
@@ -1006,7 +1039,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
         </div>
       </div>
 
-      {reporte.map(item=>{
+      {reporteFiltrado.map(item=>{
         const over=item.pct>100,warn=item.pct>80&&!over;
         const col=over?C.red:warn?C.orange:C.green;
         return <div key={item.id} style={{background:C.surface,border:`1px solid ${over?C.red+"55":C.border}`,borderRadius:10,overflow:"hidden"}}>
@@ -1068,6 +1101,13 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           </div>
         </div>;
       })}
+
+      {reporteFiltrado.length === 0 && busquedaReporte.trim() !== "" && (
+        <div style={{textAlign:"center",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:32}}>
+          <div style={{fontSize:28,marginBottom:10}}>🔍</div>
+          <div style={{fontSize:14,color:C.muted}}>Sin resultados para "{busquedaReporte}"</div>
+        </div>
+      )}
 
       {/* Correcciones */}
       {(()=>{
@@ -1131,12 +1171,11 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
             </select>
           </div>
           <div>
-            <div style={{fontSize:12,color:C.muted,marginBottom:6}}>Fecha (últimos 90 días)</div>
+            <div style={{fontSize:12,color:C.muted,marginBottom:6}}>Fecha (cualquier fecha pasada)</div>
             <input
               type="date"
               value={fHist.fecha}
               max={(()=>{const d=new Date();d.setDate(d.getDate()-1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;})()}
-              min={(()=>{const d=new Date();d.setDate(d.getDate()-90);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;})()}
               onChange={e=>setFHist(f=>({...f,fecha:e.target.value,selec:[],horas:{}}))}
               style={{width:"100%",background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",color:fHist.fecha?C.text:C.muted,fontSize:14,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}
             />
@@ -1220,22 +1259,15 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       {papeleraVigente.length>0&&<>
         <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}>
           <span style={{fontSize:11,color:C.red,letterSpacing:2,textTransform:"uppercase",fontWeight:700}}>🗑️ Papelera ({papeleraVigente.length})</span>
-          <span style={{fontSize:11,color:C.muted}}>— se borran a los 90 días</span>
+          <span style={{fontSize:11,color:C.muted}}>— borrado permanente manual</span>
         </div>
         {papeleraVigente.map(item=>{
-          const diasRestantes = Math.max(0, DIAS - Math.floor((ahora - item.deletedAt)/864e5));
-          const urgente = diasRestantes<=7;
           const totalH  = (item.registrosSnap||[]).reduce((a,r)=>a+r.items.filter(x=>x.pid===item.id).reduce((b,x)=>b+x.h,0),0);
-          return <div key={item.id} style={{background:C.surface,border:`1px solid ${urgente?C.red+"55":C.border}`,borderRadius:10,padding:"12px 14px",opacity:0.9}}>
+          return <div key={item.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px",opacity:0.9}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
               <div style={{flex:1}}>
                 <div style={{fontSize:13,fontWeight:600,color:C.text}}>{item.nombre}</div>
               <div style={{fontSize:11,color:C.muted,marginTop:3}}>Presupuesto: {$$(item.presupuesto)} · {formatHoras(totalH)} registradas</div>
-                <div style={{marginTop:4}}>
-                  <span style={{background:urgente?C.red+"22":C.orange+"22",color:urgente?C.red:C.orange,border:`1px solid ${urgente?C.red+"44":C.orange+"44"}`,borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:700}}>
-                    {urgente?"⚠️ ":"⏳ "}{diasRestantes} días restantes
-                  </span>
-                </div>
               </div>
               <div style={{display:"flex",gap:8,flexShrink:0}}>
                 <button
@@ -1334,13 +1366,13 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
     {/* ── TAB CIERRE MENSUAL ── */}
     {tab==="cierre"&&(()=>{
-      const DIAS_CIERRE = 180;
-      const ahoraCierre = Date.now();
       const cerradosRaw = proyectos.filter(p=>!p.activo);
-      const cerrados = cerradosRaw.filter(p=>{
-        if(!p.closedAt) return true;
-        return (ahoraCierre - p.closedAt) < DIAS_CIERRE * 864e5;
-      });
+      const cerradosFiltrados = busquedaCierre.trim() === ""
+        ? cerradosRaw
+        : cerradosRaw.filter(p =>
+            p.nombre.toLowerCase().includes(busquedaCierre.toLowerCase())
+          );
+      const cerrados = cerradosFiltrados;
       return <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px"}}>
           <div style={{fontSize:12,color:C.muted,lineHeight:1.6}}>
@@ -1348,7 +1380,44 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           </div>
         </div>
 
-        {cerrados.length===0&&<div style={{textAlign:"center",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:32}}><div style={{fontSize:32,marginBottom:16}}>📭</div><div style={{fontSize:14,color:C.muted,lineHeight:1.5}}>Aún no hay proyectos cerrados.</div></div>}
+        <div style={{position:"relative"}}>
+          <input
+            value={busquedaCierre}
+            onChange={e => setBusquedaCierre(e.target.value)}
+            placeholder="Buscar proyecto cerrado..."
+            style={{
+              width:"100%",
+              background:C.surface,
+              border:`1px solid ${C.border}`,
+              borderRadius:8,
+              padding:"10px 36px 10px 14px",
+              color:C.text,
+              fontSize:13,
+              outline:"none",
+              boxSizing:"border-box",
+              fontFamily:"inherit"
+            }}
+          />
+          {busquedaCierre && (
+            <button
+              onClick={()=>setBusquedaCierre("")}
+              style={{
+                position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
+                background:"none",border:"none",color:C.muted,cursor:"pointer",
+                fontSize:16,padding:0,lineHeight:1
+              }}
+            >×</button>
+          )}
+        </div>
+
+        {cerrados.length===0 && busquedaCierre.trim()===""&&<div style={{textAlign:"center",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:32}}><div style={{fontSize:32,marginBottom:16}}>📭</div><div style={{fontSize:14,color:C.muted,lineHeight:1.5}}>Aún no hay proyectos cerrados.</div></div>}
+
+        {cerrados.length === 0 && busquedaCierre.trim() !== "" && (
+          <div style={{textAlign:"center",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:32}}>
+            <div style={{fontSize:28,marginBottom:10}}>🔍</div>
+            <div style={{fontSize:14,color:C.muted}}>Sin resultados para "{busquedaCierre}"</div>
+          </div>
+        )}
 
         {cerrados.map(item=>{
           const gasto = item.gastoReal||0;
@@ -1356,9 +1425,6 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           const over  = pct>100;
           const col   = over?C.red:pct>=95?C.accent:C.green;
           const diff  = gasto - item.presupuesto;
-          const diasRestantes = item.closedAt
-            ? Math.max(0, DIAS_CIERRE - Math.floor((ahoraCierre - item.closedAt)/864e5))
-            : null;
           return <div key={item.id} style={{background:C.surface,border:`1px solid ${over?C.red+"44":C.border}`,borderRadius:12,overflow:"hidden"}}>
             <div style={{padding:"12px 14px",borderBottom:`1px solid ${C.border}`,background:over?C.red+"08":"transparent"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
@@ -1367,9 +1433,6 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                   <div style={{fontSize:11,color:C.muted,marginTop:3}}>
                     {item.cerradoEn?"Cerrado: "+item.cerradoEn+" · ":""}
                     {item.horas ? formatHoras(item.horas)+" trabajadas" : "Sin registros"}
-                    {typeof diasRestantes==="number" && (
-                      <span>{` · ${diasRestantes} días restantes`}</span>
-                    )}
                   </div>
                 </div>
                 <span style={{background:col+"22",color:col,border:`1px solid ${col}44`,borderRadius:4,padding:"2px 8px",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{pct}%</span>
@@ -1448,12 +1511,12 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           <div style={{fontSize:11,color:C.accent,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>Resumen histórico</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
             {(()=>{
-              const totalP = cerrados.reduce((a,b)=>a+b.presupuesto,0);
-              const totalG = cerrados.reduce((a,b)=>a+(b.gastoReal||0),0);
-              const totalH = cerrados.reduce((a,b)=>a+(b.horas||0),0);
+              const totalP = cerradosRaw.reduce((a,b)=>a+b.presupuesto,0);
+              const totalG = cerradosRaw.reduce((a,b)=>a+(b.gastoReal||0),0);
+              const totalH = cerradosRaw.reduce((a,b)=>a+(b.horas||0),0);
               const over   = totalG>totalP;
               return [
-                {l:"Proyectos",v:String(cerrados.length),c:C.accent},
+                {l:"Proyectos",v:String(cerradosRaw.length),c:C.accent},
                 {l:"Horas totales",v:formatHoras(totalH),c:C.text},
                 {l:"Desviación",v:(over?"+":"-")+$$(Math.abs(totalG-totalP)),c:over?C.red:C.green},
               ].map(k=><div key={k.l} style={{textAlign:"center"}}>
@@ -1700,11 +1763,8 @@ export default function App(){
         if(esLimpieza) {
           const { data: paExist } = await supabase.from("papelera").select("id,proyecto_id,deleted_at");
           const idsInState = new Set(papelera.map(x => x.id));
-          const ahoraMs = Date.now();
           for(const row of paExist||[]) {
-            const deletedMs = row.deleted_at ? new Date(row.deleted_at).getTime() : 0;
-            const antiguedad = ahoraMs - deletedMs;
-            if(!idsInState.has(row.proyecto_id) && antiguedad > 120000) {
+            if(!idsInState.has(row.proyecto_id)) {
               await supabase.from("papelera").delete().eq("id", row.id);
             }
           }
