@@ -563,7 +563,7 @@ function DiaHistorial({fecha, items, totalDia, costoDia, proyectos, emp, onElimi
 }
 
 // ── PANEL ADMIN ───────────────────────────────────────────────
-function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,bonos,setBonos,asistencia,setAsistencia,onBack,saving,saveError,onDataChanged,pendingDeletedEids,pendingDeletedRegs,pendingDeletedAsist,pendingDeletedBonos}){
+function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,bonos,setBonos,onBack,saving,saveError,onDataChanged,pendingDeletedEids,pendingDeletedRegs}){
   const [tab,setTab]=useState("reporte");
 
   // Proyectos
@@ -591,16 +591,11 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const [confirmDelDia, setConfirmDelDia] = useState(null); // {fecha, fechaLabel}
   const [busquedaReporte, setBusquedaReporte] = useState("");
   const [busquedaCierre, setBusquedaCierre] = useState("");
-  const [calMes, setCalMes] = useState(()=>{const h=new Date();return{y:h.getFullYear(),m:h.getMonth()};});
-  const [modalDia, setModalDia] = useState(null);
-  const [confirmNoLab, setConfirmNoLab] = useState(null);
-  const [mcorrFecha, setMcorrFecha] = useState(null);
 
   const eliminarEmpleadoConRegistros = (emp) => {
     if(!emp) return;
     setRegistros(prev=>prev.filter(r=>r.eid!==emp.id));
     setBonos(prev=>prev.filter(b=>b.eid!==emp.id));
-    setAsistencia(prev=>prev.filter(a=>a.eid!==emp.id));
     setEmpleados(prev=>prev.filter(x=>x.id!==emp.id));
     setDelEmp(null);
     pendingDeletedEids.current = [...pendingDeletedEids.current, emp.id];
@@ -728,24 +723,22 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     const reg=registros.find(r=>r.eid===eid && r.fecha===hoy());
     const ids=reg?.items.map(x=>x.pid)||[];
     const hrs={};reg?.items.forEach(x=>{hrs[x.pid]=x.h;});
-    setCSelec(ids);setCHoras(hrs);setMcorrFecha(null);setMcorr(eid);
+    setCSelec(ids);setCHoras(hrs);setMcorr(eid);
   };
   const guardarCorr = () => {
-    const fechaCorr = mcorrFecha || hoy();
     const items = cSelec
       .map(id => ({pid:id, h:Number(cHoras[id])||0}))
       .filter(it => it.h > 0);
     setRegistros(prev => {
-      const existe = prev.find(r => r.eid===mcorr && r.fecha===fechaCorr);
+      const existe = prev.find(r => r.eid===mcorr && r.fecha===hoy());
       if(items.length === 0) {
-        return existe ? prev.filter(r => !(r.eid===mcorr && r.fecha===fechaCorr)) : prev;
+        return existe ? prev.filter(r => !(r.eid===mcorr && r.fecha===hoy())) : prev;
       }
       if(existe)
-        return prev.map(r => (r.eid===mcorr && r.fecha===fechaCorr) ? {...r, items} : r);
-      return [...prev, {eid:mcorr, llenadorId:mcorr, fecha:fechaCorr, items}];
+        return prev.map(r => (r.eid===mcorr && r.fecha===hoy()) ? {...r, items} : r);
+      return [...prev, {eid:mcorr, llenadorId:mcorr, fecha:hoy(), items}];
     });
     setMcorr(null);
-    setMcorrFecha(null);
     setTimeout(() => onDataChanged(), 0);
   };
 
@@ -781,7 +774,6 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   };
 
   const eliminarBono = (id) => {
-    pendingDeletedBonos.current = [...pendingDeletedBonos.current, id];
     setBonos(prev => prev.filter(b => b.id !== id));
     setTimeout(() => onDataChanged(), 0);
   };
@@ -848,65 +840,6 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     : bonos.filter(b => proyectosActivosIds.has(b.pid))
   ).reduce((a,b) => a + b.monto, 0);
 
-  const diasEnMes = new Date(calMes.y, calMes.m+1, 0).getDate();
-  const primerDia = new Date(calMes.y, calMes.m, 1).getDay();
-  const primerLunes = primerDia === 0 ? 6 : primerDia - 1;
-  const hoyDate = new Date();
-  const hoyStr2 = `${hoyDate.getFullYear()}-${String(hoyDate.getMonth()+1).padStart(2,'0')}-${String(hoyDate.getDate()).padStart(2,'0')}`;
-
-  const fmtFechaCal = (y,m,d) => `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-
-  const getEstadoDia = (fechaStr) => {
-    const esNoLab = asistencia.some(a => a.fecha === fechaStr && a.estado === "no_laborable" && !a.eid);
-    if(esNoLab) return "no_laborable";
-
-    const activosIds = empleados.filter(e=>e.activo).map(e=>e.id);
-    if(activosIds.length === 0) return "sin_empleados";
-
-    const faltantes = activosIds.filter(eid => {
-      const tieneRegistro = registros.some(r => r.eid===eid && r.fecha===fechaStr && r.items?.some(it=>(Number(it.h)||0)>0));
-      if(tieneRegistro) return false;
-      const tieneAsistencia = asistencia.some(a => a.eid===eid && a.fecha===fechaStr && a.estado !== "no_laborable");
-      return !tieneAsistencia;
-    });
-
-    if(faltantes.length === 0) return "completo";
-    if(faltantes.length === activosIds.length) return "vacio";
-    return "parcial";
-  };
-
-  const colorDia = (estado, esFuturo) => {
-    if(esFuturo) return {bg:"transparent", border:"transparent", color:C.muted};
-    if(estado === "no_laborable") return {bg:"#333333", border:"#444444", color:"#666666"};
-    if(estado === "completo") return {bg:C.green+"22", border:C.green+"55", color:C.green};
-    if(estado === "vacio") return {bg:C.red+"22", border:C.red+"55", color:C.red};
-    if(estado === "parcial") return {bg:C.orange+"22", border:C.orange+"55", color:C.orange};
-    return {bg:C.surface, border:C.border, color:C.muted};
-  };
-
-  const getFaltantesDia = (fechaStr) => {
-    return empleados.filter(e => {
-      if(!e.activo) return false;
-      const tieneRegistro = registros.some(r => r.eid===e.id && r.fecha===fechaStr && r.items?.some(it=>(Number(it.h)||0)>0));
-      if(tieneRegistro) return false;
-      const tieneAsistencia = asistencia.some(a => a.eid===e.id && a.fecha===fechaStr);
-      return !tieneAsistencia;
-    });
-  };
-
-  const mesNombre = new Date(calMes.y, calMes.m, 1).toLocaleDateString("es-MX",{month:"long",year:"numeric"});
-  const mesLabel = mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1);
-
-  const resumen = {completo:0, parcial:0, vacio:0, no_laborable:0};
-  for(let d=1; d<=diasEnMes; d++){
-    const f = fmtFechaCal(calMes.y, calMes.m, d);
-    const fd = new Date(calMes.y, calMes.m, d);
-    if(fd <= hoyDate) {
-      const est = getEstadoDia(f);
-      if(resumen[est] !== undefined) resumen[est]++;
-    }
-  };
-
   if(empHistorial) {
     const emp = empleados.find(e => e.id === empHistorial.id) || empHistorial;
     const diasConRegistro = registros
@@ -914,17 +847,11 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       .map(r => ({ fecha: r.fecha, items: r.items.filter(it => (Number(it.h)||0) > 0) }))
       .sort((a, b) => b.fecha.localeCompare(a.fecha));
 
-    const dias = diasConRegistro.map(d => d.fecha);
-
     const formatFecha = f => {
       const [y,m,d] = f.split("-");
       const meses = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
       return `${Number(d)} ${meses[Number(m)-1]} ${y}`;
     };
-
-    const diasAsistencia = asistencia
-      .filter(a => a.eid === emp.id && !diasConRegistro.find(d=>d.fecha===a.fecha))
-      .sort((a,b) => b.fecha.localeCompare(a.fecha));
 
     const totalHoras = diasConRegistro.reduce((a,d) => a + d.items.reduce((b,it) => b+(Number(it.h)||0), 0), 0);
     const totalCosto = diasConRegistro.reduce((a,d) => a + d.items.reduce((b,it) => b+(Number(it.h)||0)*emp.tarifa, 0), 0);
@@ -976,24 +903,6 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           onEliminar={()=>setConfirmDelDia({fecha, fechaLabel:formatFecha(fecha)})}
         />;
       })}
-      {diasAsistencia.map(a=>{
-        const estadoLabel = {tarde:"🕐 Llegó tarde",justificada:"✅ Falta justificada",injustificada:"❌ Falta injustificada"}[a.estado]||a.estado;
-        const estadoColor = {tarde:C.orange,justificada:C.green,injustificada:C.red}[a.estado]||C.muted;
-        return <div key={a.id} style={{background:C.surface,border:`1px solid ${estadoColor}33`,borderRadius:10,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div>
-            <div style={{fontSize:13,fontWeight:700,color:C.text}}>{formatFecha(a.fecha)}</div>
-            <div style={{fontSize:11,color:estadoColor,marginTop:2,fontWeight:700}}>{estadoLabel}</div>
-          </div>
-          <button
-            onClick={()=>{
-              pendingDeletedAsist.current = [...pendingDeletedAsist.current, a.id];
-              setAsistencia(prev=>prev.filter(x=>x.id!==a.id));
-              setTimeout(()=>onDataChanged(),0);
-            }}
-            style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:14,padding:"4px"}}
-          >×</button>
-        </div>;
-      })}
       {confirmDelDia && <Confirm
         msg={`¿Eliminar el registro del ${confirmDelDia.fechaLabel} de ${emp.nombre}? Esta acción no se puede deshacer.`}
         okLabel="Eliminar registro"
@@ -1030,7 +939,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
 
     {/* tabs */}
     <div style={{display:"flex",gap:6,marginBottom:16}}>
-      {[{id:"reporte",l:"📋 Reporte"},{id:"proyectos",l:"🏗️ Proyectos"},{id:"empleados",l:"👷 Empleados"},{id:"cierre",l:"📅 Cierre"},{id:"asistencia",l:"📅 Asistencia"}].map(t=>(
+      {[{id:"reporte",l:"📋 Reporte"},{id:"proyectos",l:"🏗️ Proyectos"},{id:"empleados",l:"👷 Empleados"},{id:"cierre",l:"📅 Cierre"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,padding:"10px 4px",background:tab===t.id?C.accent:C.surface,border:`1px solid ${tab===t.id?C.accent:C.border}`,borderRadius:8,color:tab===t.id?"#FFFFFF":C.muted,fontWeight:tab===t.id?800:400,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>
       ))}
     </div>
@@ -1623,204 +1532,12 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       </div>;
     })()}
 
-
-    {tab==="asistencia"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <button
-          onClick={()=>setCalMes(p=>{
-            const d=new Date(p.y,p.m-1,1);
-            return {y:d.getFullYear(),m:d.getMonth()};
-          })}
-          style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 14px",color:C.muted,cursor:"pointer",fontFamily:"inherit",fontSize:16}}
-        >←</button>
-        <span style={{fontSize:15,fontWeight:800,color:C.text}}>{mesLabel}</span>
-        <button
-          onClick={()=>setCalMes(p=>{
-            const d=new Date(p.y,p.m+1,1);
-            const h=new Date();
-            if(d.getFullYear()>h.getFullYear()||(d.getFullYear()===h.getFullYear()&&d.getMonth()>h.getMonth())) return p;
-            return {y:d.getFullYear(),m:d.getMonth()};
-          })}
-          style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"8px 14px",color:C.muted,cursor:"pointer",fontFamily:"inherit",fontSize:16}}
-        >→</button>
-      </div>
-
-      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-        {[
-          {color:C.green, label:"Completo"},
-          {color:C.orange, label:"Parcial"},
-          {color:C.red, label:"Faltante"},
-          {color:"#555", label:"No laborable"},
-        ].map(l=>(
-          <div key={l.label} style={{display:"flex",alignItems:"center",gap:5}}>
-            <div style={{width:10,height:10,borderRadius:2,background:l.color}}/>
-            <span style={{fontSize:11,color:C.muted}}>{l.label}</span>
-          </div>
-        ))}
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-        {["L","M","X","J","V","S","D"].map(d=>(
-          <div key={d} style={{textAlign:"center",fontSize:11,color:C.muted,fontWeight:700,padding:"4px 0"}}>{d}</div>
-        ))}
-      </div>
-
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-        {Array.from({length:primerLunes}).map((_,i)=>(
-          <div key={"empty-"+i}/>
-        ))}
-        {Array.from({length:diasEnMes},(_,i)=>i+1).map(dia=>{
-          const fechaStr = fmtFechaCal(calMes.y, calMes.m, dia);
-          const fechaObj = new Date(calMes.y, calMes.m, dia);
-          const esFuturo = fechaObj > hoyDate;
-          const esHoy = fechaStr === hoyStr2;
-          const estado = esFuturo ? "futuro" : getEstadoDia(fechaStr);
-          const col = colorDia(estado, esFuturo);
-          const faltantes = !esFuturo && estado !== "no_laborable" ? getFaltantesDia(fechaStr) : [];
-          return (
-            <button
-              key={fechaStr}
-              onClick={()=>{
-                if(esFuturo) return;
-                if(estado === "no_laborable") {
-                  const noLabId = asistencia.find(a=>a.fecha===fechaStr && a.estado==="no_laborable" && !a.eid)?.id;
-                  if(noLabId) pendingDeletedAsist.current = [...pendingDeletedAsist.current, noLabId];
-                  setAsistencia(prev=>prev.filter(a=>!(a.fecha===fechaStr && a.estado==="no_laborable" && !a.eid)));
-                  setTimeout(()=>onDataChanged(),0);
-                  return;
-                }
-                if(faltantes.length > 0 || estado === "completo" || estado === "parcial") {
-                  const fmt = f=>{const[y,m,d]=f.split("-");const ms=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];return `${Number(d)} ${ms[Number(m)-1]} ${y}`;};
-                  setModalDia({fecha:fechaStr, fechaLabel:fmt(fechaStr), faltantes});
-                }
-              }}
-              style={{
-                aspectRatio:"1",
-                borderRadius:6,
-                background:col.bg,
-                border:`1px solid ${col.border}`,
-                color:col.color,
-                fontSize:12,
-                fontWeight:esHoy?900:600,
-                cursor:esFuturo?"default":"pointer",
-                fontFamily:"inherit",
-                display:"flex",
-                flexDirection:"column",
-                alignItems:"center",
-                justifyContent:"center",
-                gap:2,
-                outline:esHoy?`2px solid ${C.accent}`:"none",
-                outlineOffset:1,
-              }}
-            >
-              <span>{dia}</span>
-              {!esFuturo && faltantes.length > 0 && (
-                <span style={{fontSize:8,fontWeight:800}}>{faltantes.length}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      <Btn variant="ghost" onClick={()=>setConfirmNoLab(hoyStr2)}>
-        ⚪ Marcar día como no laborable
-      </Btn>
-
-      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 14px"}}>
-        <div style={{fontSize:11,color:C.accent,fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>Resumen del mes</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          {[
-            {l:"Días completos",v:resumen.completo,c:C.green},
-            {l:"Días parciales",v:resumen.parcial,c:C.orange},
-            {l:"Días faltantes",v:resumen.vacio,c:C.red},
-            {l:"No laborables",v:resumen.no_laborable,c:C.muted},
-          ].map(k=>(
-            <div key={k.l} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px",textAlign:"center"}}>
-              <div style={{fontSize:18,fontWeight:900,color:k.c}}>{k.v}</div>
-              <div style={{fontSize:10,color:C.muted,marginTop:2}}>{k.l}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {modalDia && (
-        <Sheet title={`📅 ${modalDia.fechaLabel}`} onClose={()=>setModalDia(null)}>
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            {modalDia.faltantes.length === 0 ? (
-              <div style={{fontSize:13,color:C.muted,textAlign:"center",padding:"16px 0"}}>
-                ✅ Todos los trabajadores tienen registro este día.
-              </div>
-            ) : (
-              <>
-                <div style={{fontSize:13,color:C.muted,marginBottom:4}}>
-                  {modalDia.faltantes.length} trabajador{modalDia.faltantes.length!==1?"es":""} sin resolver:
-                </div>
-                {modalDia.faltantes.map(emp=>(
-                  <div key={emp.id} style={{background:C.bg,border:`1px solid ${C.border}`,borderRadius:10,padding:"12px 14px"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                      <div style={{width:32,height:32,borderRadius:"50%",background:C.accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:C.accent,fontWeight:900,flexShrink:0}}>{emp.nombre[0]}</div>
-                      <span style={{fontSize:13,fontWeight:600,color:C.text}}>{emp.nombre}</span>
-                    </div>
-                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                      <button
-                        onClick={()=>{
-                          const reg=registros.find(r=>r.eid===emp.id && r.fecha===modalDia.fecha);
-                          const ids=reg?.items?.map(x=>x.pid)||[];
-                          const hrs={};reg?.items?.forEach(x=>{hrs[x.pid]=x.h;});
-                          setCSelec(ids);setCHoras(hrs);setMcorrFecha(modalDia.fecha);setMcorr(emp.id);
-                          setModalDia(null);
-                        }}
-                        style={{background:C.accent+"11",border:`1px solid ${C.accent}44`,borderRadius:7,padding:"6px 10px",color:C.accent,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}
-                      >✏️ Registrar horas</button>
-                      {[
-                        {est:"tarde",label:"🕐 Llegó tarde",color:C.orange},
-                        {est:"justificada",label:"✅ Falta justificada",color:C.green},
-                        {est:"injustificada",label:"❌ Falta injustificada",color:C.red},
-                      ].map(op=>(
-                        <button
-                          key={op.est}
-                          onClick={()=>{
-                            const idAnterior = asistencia.find(a=>a.eid===emp.id&&a.fecha===modalDia.fecha)?.id;
-                            if(idAnterior) pendingDeletedAsist.current = [...pendingDeletedAsist.current, idAnterior];
-                            const id=(typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random()));
-                            setAsistencia(prev=>[...prev.filter(a=>!(a.eid===emp.id&&a.fecha===modalDia.fecha)),{id,eid:emp.id,fecha:modalDia.fecha,estado:op.est}]);
-                            setTimeout(()=>onDataChanged(),0);
-                            setModalDia(prev=>prev?({...prev,faltantes:prev.faltantes.filter(e=>e.id!==emp.id)}):null);
-                          }}
-                          style={{background:op.color+"11",border:`1px solid ${op.color}44`,borderRadius:7,padding:"6px 10px",color:op.color,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}
-                        >{op.label}</button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-            <Btn onClick={()=>setModalDia(null)} variant="secondary" full>Cerrar</Btn>
-          </div>
-        </Sheet>
-      )}
-
-      {confirmNoLab && (
-        <Confirm
-          msg={`¿Marcar el día de hoy como no laborable? Todos los trabajadores quedarán exentos de registro ese día.`}
-          okLabel="Marcar no laborable"
-          onOk={()=>{
-            const id=(typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():String(Date.now()));
-            setAsistencia(prev=>[...prev.filter(a=>!(a.fecha===confirmNoLab&&a.estado==="no_laborable"&&!a.eid)),{id,eid:null,fecha:confirmNoLab,estado:"no_laborable"}]);
-            setConfirmNoLab(null);
-            setTimeout(()=>onDataChanged(),0);
-          }}
-          onCancel={()=>setConfirmNoLab(null)}
-        />
-      )}
-    </div>}
-
     {/* Modal corrección admin */}
-    {mcorr&&<Sheet title={`Corregir — ${empleados.find(e=>e.id===mcorr)?.nombre}${mcorrFecha && mcorrFecha!==hoy() ? ` · ${(()=>{const[y,m,d]=mcorrFecha.split("-");const ms=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];return `${Number(d)} ${ms[Number(m)-1]}`;})()}` : ""}`} onClose={()=>{setMcorr(null);setMcorrFecha(null);}}>
+    {mcorr&&<Sheet title={`Corregir — ${empleados.find(e=>e.id===mcorr)?.nombre}`} onClose={()=>setMcorr(null)}>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         <ProyectoSelector proyectos={proyectos} selec={cSelec} setSelec={setCSelec} horas={cHoras} setHoras={setCHoras} extraVisibleIds={cSelec}/>
         <div style={{display:"flex",gap:8,marginTop:4}}>
-          <Btn onClick={()=>{setMcorr(null);setMcorrFecha(null);}} variant="secondary" full>Cancelar</Btn>
+          <Btn onClick={()=>setMcorr(null)} variant="secondary" full>Cancelar</Btn>
           <Btn onClick={guardarCorr} full disabled={saving}>
             {saving ? "Guardando..." : cSelec.length > 0 ? "Guardar" : "Limpiar registro"}
           </Btn>
@@ -1847,25 +1564,22 @@ export default function App(){
   const [registros,setRegistros]=useState([]);
   const [papelera,setPapelera]=useState([]);
   const [bonos, setBonos] = useState([]);
-  const [asistencia, setAsistencia] = useState([]);
   const [saving,setSaving]=useState(false);
   const [saveError,setSaveError]=useState("");
   const [fechaActual, setFechaActual] = useState(hoy());
 
   const isFirstSync = useRef(true);
   const isSyncing = useRef(false);
-  const stateForSync = useRef({ proyectos:[], empleados:[], registros:[], papelera:[], bonos:[], asistencia:[] });
+  const stateForSync = useRef({ proyectos:[], empleados:[], registros:[], papelera:[], bonos:[] });
   const needsSync = useRef(false);
   const syncCount = useRef(0);
   const pendingDeletedEids = useRef([]);
   const pendingDeletedRegs = useRef([]);
-  const pendingDeletedAsist = useRef([]);
-  const pendingDeletedBonos = useRef([]);
   const [syncTrigger, setSyncTrigger] = useState(0);
 
   useEffect(() => {
-    stateForSync.current = { proyectos, empleados, registros, papelera, bonos, asistencia };
-  }, [proyectos, empleados, registros, papelera, bonos, asistencia]);
+    stateForSync.current = { proyectos, empleados, registros, papelera, bonos };
+  }, [proyectos, empleados, registros, papelera, bonos]);
 
   useEffect(() => {
     const intervalo = setInterval(() => {
@@ -1880,22 +1594,18 @@ export default function App(){
     if(!supabase){ setLoading(false); return; }
     (async ()=>{
       try {
-        const [pr,em,re,pa,bo,as]=await Promise.all([
+        const [pr,em,re,pa,bo]=await Promise.all([
           supabase.from("proyectos").select("*").order("nombre"),
           supabase.from("empleados").select("*").order("nombre"),
           supabase.from("registros").select("*"),
           supabase.from("papelera").select("*").order("deleted_at",{ascending:false}),
           supabase.from("bonos").select("*").order("fecha",{ascending:false}),
-          supabase.from("asistencia").select("*").order("fecha", {ascending:false}),
         ]);
         if(pr.data?.length) setProyectos(pr.data.map(fromDbProyecto).filter(Boolean));
         if(em.data?.length) setEmpleados(em.data.map(r=>({id:r.id,nombre:r.nombre,activo:r.activo,tarifa:r.tarifa})));
         if(re.data?.length) setRegistros(re.data.map(fromDbRegistro).filter(Boolean));
         if(pa.data?.length) setPapelera(pa.data.map(r=>{ const s=r.snapshot||{}; const p=s.proyecto||{}; return { id:p.id||r.proyecto_id,nombre:p.nombre,activo:p.activo,presupuesto:p.presupuesto,deletedAt:new Date(r.deleted_at).getTime(),registrosSnap:s.registrosSnap||[] }; }));
         if(bo.data?.length) setBonos(bo.data.map(r=>({id:r.id,eid:r.eid,pid:r.pid,monto:r.monto,concepto:r.concepto,fecha:r.fecha})));
-        if(as.data?.length) setAsistencia(as.data.map(r=>({
-          id:r.id, eid:r.eid||null, fecha:r.fecha, estado:r.estado
-        })));
       } catch(e){ console.warn("Error cargando Supabase",e); }
       setLoading(false);
     })();
@@ -1984,11 +1694,9 @@ export default function App(){
       needsSync.current = false;
       syncCount.current += 1;
       const esLimpieza = syncCount.current % 10 === 0;
-      const { proyectos, empleados, registros, papelera, bonos, asistencia } = stateForSync.current;
+      const { proyectos, empleados, registros, papelera, bonos } = stateForSync.current;
       const eidsToDelete = [...pendingDeletedEids.current];
       const regsToDelete = [...pendingDeletedRegs.current];
-      const asistToDelete = [...pendingDeletedAsist.current];
-      const bonosToDelete = [...pendingDeletedBonos.current];
       setSaving(true);
       setSaveError("");
       try {
@@ -2001,16 +1709,6 @@ export default function App(){
         if(regsToDelete.length > 0) {
           for(const reg of regsToDelete) {
             await supabase.from("registros").delete().eq("eid", reg.eid).eq("fecha", reg.fecha);
-          }
-        }
-        if(asistToDelete.length > 0) {
-          for(const id of asistToDelete) {
-            await supabase.from("asistencia").delete().eq("id", id);
-          }
-        }
-        if(bonosToDelete.length > 0) {
-          for(const id of bonosToDelete) {
-            await supabase.from("bonos").delete().eq("id", id);
           }
         }
         if(proyectos.length > 0) {
@@ -2081,19 +1779,6 @@ export default function App(){
             if(!bonosIds.has(row.id)) await supabase.from("bonos").delete().eq("id", row.id);
           }
         }
-        if(asistencia.length > 0) {
-          await supabase.from("asistencia").upsert(
-            asistencia.map(a => ({id:a.id, eid:a.eid||null, fecha:a.fecha, estado:a.estado})),
-            {onConflict:"id"}
-          );
-        }
-        if(esLimpieza) {
-          const { data: asistExist } = await supabase.from("asistencia").select("id");
-          const asistIds = new Set(asistencia.map(a => a.id));
-          for(const row of asistExist || []) {
-            if(!asistIds.has(row.id)) await supabase.from("asistencia").delete().eq("id", row.id);
-          }
-        }
       } catch(e){
         console.warn("Error guardando en Supabase",e);
         setSaveError("No se pudo guardar. Verifica tu conexión e intenta de nuevo");
@@ -2108,16 +1793,6 @@ export default function App(){
         if(regsToDelete.length > 0) {
           pendingDeletedRegs.current = pendingDeletedRegs.current.filter(
             reg => !regsToDelete.some(r => r.eid === reg.eid && r.fecha === reg.fecha)
-          );
-        }
-        if(asistToDelete.length > 0) {
-          pendingDeletedAsist.current = pendingDeletedAsist.current.filter(
-            id => !asistToDelete.includes(id)
-          );
-        }
-        if(bonosToDelete.length > 0) {
-          pendingDeletedBonos.current = pendingDeletedBonos.current.filter(
-            id => !bonosToDelete.includes(id)
           );
         }
         if(needsSync.current) {
@@ -2175,7 +1850,7 @@ export default function App(){
           {screen==="home"&&<PantallaInicio onSelect={ir}/>}
           {screen==="worker"&&<PantallaTrabajador proyectos={proyectos} empleados={empleados} registros={registros} onGuardar={guardarRegistro} onBack={()=>setScreen("home")} saving={saving} saveError={saveError}/>}
           {screen==="pin"&&<PantallaPIN onSuccess={()=>{setAuthed(true);setScreen("admin");}} onBack={()=>setScreen("home")}/>}
-          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} bonos={bonos} setBonos={setBonos} asistencia={asistencia} setAsistencia={setAsistencia} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)} pendingDeletedEids={pendingDeletedEids} pendingDeletedRegs={pendingDeletedRegs} pendingDeletedAsist={pendingDeletedAsist} pendingDeletedBonos={pendingDeletedBonos}/>}
+          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} bonos={bonos} setBonos={setBonos} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)} pendingDeletedEids={pendingDeletedEids} pendingDeletedRegs={pendingDeletedRegs}/>}
         </div>
 
         <div style={{height:22,background:"#0D0D0D",borderTop:"1px solid #1F1F1F",display:"flex",alignItems:"center",justifyContent:"center"}}>
