@@ -324,10 +324,12 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
     setSelec(ids); setHoras(hrs); setEditando(true); setOrigenS3("s2b"); setStep("s3");
   }
 
-  function enviar(){
+  async function enviar(){
     const items = selec.map(id => ({pid:id, h:Number(horas[id])||0}));
-    onGuardar(target.id, llenador.id, items);
-    setStep("s4");
+    try {
+      await onGuardar(target.id, llenador.id, items);
+      setStep("s4");
+    } catch(_e) {}
   }
 
   function limpiarFlujo(){
@@ -476,6 +478,11 @@ function PantallaTrabajador({proyectos,empleados,registros,onGuardar,onBack,savi
       {step==="s4" && (
         <div style={{textAlign:"center",padding:"16px 0"}}>
           <div style={{fontSize:52,marginBottom:12}}>{editando ? "✏️" : "✅"}</div>
+          {supabase !== null && (
+            <div style={{display:"inline-block",background:C.green+"11",border:`1px solid ${C.green}44`,borderRadius:999,padding:"4px 10px",fontSize:11,fontWeight:700,color:C.green,marginBottom:10}}>
+              Guardado en servidor ✓
+            </div>
+          )}
           <div style={{fontSize:22,fontWeight:900,color:C.text,marginBottom:6}}>{editando ? "¡Corregido!" : "¡Registro enviado!"}</div>
           <div style={{fontSize:13,color:C.muted,marginBottom:16}}>
             {"Las horas de "}<strong style={{color:C.text}}>{target ? target.nombre : ""}</strong>{" quedaron guardadas."}
@@ -1803,7 +1810,18 @@ export default function App(){
     })();
   },[syncTrigger,loading]);
 
-  const guardarRegistro=(eid,llenadorId,items)=>{
+  const guardarRegistro=async(eid,llenadorId,items)=>{
+    if(supabase){
+      setSaveError("");
+      const { error } = await supabase.from("registros").upsert(
+        { eid, llenador_id: llenadorId, fecha: hoy(), items },
+        { onConflict: "eid,fecha" }
+      );
+      if(error){
+        setSaveError("No se pudo guardar. Verifica tu conexión e intenta de nuevo");
+        throw error;
+      }
+    }
     setRegistros(prev=>{
       const hoyStr = hoy();
       if(items.length === 0) {
