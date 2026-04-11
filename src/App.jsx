@@ -570,7 +570,7 @@ function DiaHistorial({fecha, items, totalDia, costoDia, proyectos, emp, onElimi
 }
 
 // ── PANEL ADMIN ───────────────────────────────────────────────
-function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,bonos,setBonos,onBack,saving,saveError,onDataChanged,pendingDeletedEids,pendingDeletedRegs}){
+function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,setRegistros,papelera,setPapelera,bonos,setBonos,onBack,saving,setSaving,saveError,setSaveError,onDataChanged,pendingDeletedEids,pendingDeletedRegs}){
   const [tab,setTab]=useState("reporte");
 
   // Proyectos
@@ -599,13 +599,22 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
   const [busquedaReporte, setBusquedaReporte] = useState("");
   const [busquedaCierre, setBusquedaCierre] = useState("");
 
-  const eliminarEmpleadoConRegistros = (emp) => {
+  const eliminarEmpleadoConRegistros = async (emp) => {
     if(!emp) return;
+    if (supabase) {
+      const { error: errBonos } = await supabase.from("bonos").delete().eq("eid", emp.id);
+      if (errBonos) return;
+      const { error: errRegs } = await supabase.from("registros").delete().eq("eid", emp.id);
+      if (errRegs) return;
+      const { error: errEmp } = await supabase.from("empleados").delete().eq("id", emp.id);
+      if (errEmp) return;
+    } else {
+      pendingDeletedEids.current = [...pendingDeletedEids.current, emp.id];
+    }
     setRegistros(prev=>prev.filter(r=>r.eid!==emp.id));
     setBonos(prev=>prev.filter(b=>b.eid!==emp.id));
     setEmpleados(prev=>prev.filter(x=>x.id!==emp.id));
     setDelEmp(null);
-    pendingDeletedEids.current = [...pendingDeletedEids.current, emp.id];
     setTimeout(() => onDataChanged(), 0);
   };
   // Corrección admin
@@ -732,28 +741,71 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     const hrs={};reg?.items.forEach(x=>{hrs[x.pid]=x.h;});
     setCSelec(ids);setCHoras(hrs);setMcorr(eid);
   };
-  const guardarCorr = () => {
+  const guardarCorr = async () => {
+    if (!mcorr) return;
     const items = cSelec
       .map(id => ({pid:id, h:Number(cHoras[id])||0}))
       .filter(it => it.h > 0);
+    const fechaHoy = hoy();
+    if (supabase) {
+      setSaving(true);
+      setSaveError("");
+      try {
+        let error = null;
+        if (items.length === 0) {
+          const r = await supabase.from("registros").delete().eq("eid", mcorr).eq("fecha", fechaHoy);
+          error = r.error;
+        } else {
+          const r = await supabase.from("registros").upsert(
+            { eid: mcorr, llenador_id: mcorr, fecha: fechaHoy, items },
+            { onConflict: "eid,fecha" }
+          );
+          error = r.error;
+        }
+        if (error) {
+          setSaveError("No se pudo guardar. Verifica tu conexión e intenta de nuevo");
+          console.warn(error);
+          return;
+        }
+      } finally {
+        setSaving(false);
+      }
+    }
     setRegistros(prev => {
-      const existe = prev.find(r => r.eid===mcorr && r.fecha===hoy());
+      const existe = prev.find(r => r.eid===mcorr && r.fecha===fechaHoy);
       if(items.length === 0) {
-        return existe ? prev.filter(r => !(r.eid===mcorr && r.fecha===hoy())) : prev;
+        return existe ? prev.filter(r => !(r.eid===mcorr && r.fecha===fechaHoy)) : prev;
       }
       if(existe)
-        return prev.map(r => (r.eid===mcorr && r.fecha===hoy()) ? {...r, items} : r);
-      return [...prev, {eid:mcorr, llenadorId:mcorr, fecha:hoy(), items}];
+        return prev.map(r => (r.eid===mcorr && r.fecha===fechaHoy) ? {...r, items} : r);
+      return [...prev, {eid:mcorr, llenadorId:mcorr, fecha:fechaHoy, items}];
     });
     setMcorr(null);
     setTimeout(() => onDataChanged(), 0);
   };
 
-  const guardarBono = () => {
+  const guardarBono = async () => {
     if(!fBono.eid || !fBono.pid) { setErrBono("Selecciona trabajador y proyecto"); return; }
     const montoNum = Number(fBono.monto)||0;
     if(montoNum <= 0) { setErrBono("El monto debe ser mayor a $0"); return; }
     const id = (typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():String(Date.now()));
+    if (supabase) {
+      setSaving(true);
+      setSaveError("");
+      try {
+        const { error } = await supabase.from("bonos").upsert(
+          { id, eid: fBono.eid, pid: fBono.pid, monto: montoNum, concepto: fBono.concepto.trim()||"Bono", fecha: hoy() },
+          { onConflict: "id" }
+        );
+        if (error) {
+          setSaveError("No se pudo guardar. Verifica tu conexión e intenta de nuevo");
+          console.warn(error);
+          return;
+        }
+      } finally {
+        setSaving(false);
+      }
+    }
     setBonos(prev => [{id, eid:fBono.eid, pid:fBono.pid, monto:montoNum, concepto:fBono.concepto.trim()||"Bono", fecha:hoy()}, ...prev]);
     setMBono(false);
     setFBono({eid:"", pid:"", monto:"", concepto:""});
@@ -761,7 +813,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setTimeout(() => onDataChanged(), 0);
   };
 
-  const guardarHistorico = () => {
+  const guardarHistorico = async () => {
     if(!fHist.eid) { setErrHist("Selecciona un trabajador"); return; }
     if(!fHist.fecha) { setErrHist("Selecciona una fecha"); return; }
     if(fHist.fecha === hoy()) { setErrHist("Para registrar hoy usa el flujo normal de trabajadores"); return; }
@@ -769,6 +821,23 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       .map(id => ({pid:id, h:Number(fHist.horas[id])||0}))
       .filter(it => it.h > 0);
     if(items.length === 0) { setErrHist("Agrega al menos un proyecto con horas"); return; }
+    if (supabase) {
+      setSaving(true);
+      setSaveError("");
+      try {
+        const { error } = await supabase.from("registros").upsert(
+          { eid: fHist.eid, llenador_id: fHist.eid, fecha: fHist.fecha, items },
+          { onConflict: "eid,fecha" }
+        );
+        if (error) {
+          setSaveError("No se pudo guardar. Verifica tu conexión e intenta de nuevo");
+          console.warn(error);
+          return;
+        }
+      } finally {
+        setSaving(false);
+      }
+    }
     setRegistros(prev => {
       const existe = prev.find(r => r.eid===fHist.eid && r.fecha===fHist.fecha);
       if(existe) return prev.map(r => (r.eid===fHist.eid && r.fecha===fHist.fecha) ? {...r, items, llenadorId:fHist.eid} : r);
@@ -780,7 +849,21 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
     setTimeout(() => onDataChanged(), 0);
   };
 
-  const eliminarBono = (id) => {
+  const eliminarBono = async (id) => {
+    if (supabase) {
+      setSaving(true);
+      setSaveError("");
+      try {
+        const { error } = await supabase.from("bonos").delete().eq("id", id);
+        if (error) {
+          setSaveError("No se pudo guardar. Verifica tu conexión e intenta de nuevo");
+          console.warn(error);
+          return;
+        }
+      } finally {
+        setSaving(false);
+      }
+    }
     setBonos(prev => prev.filter(b => b.id !== id));
     setTimeout(() => onDataChanged(), 0);
   };
@@ -913,8 +996,18 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       {confirmDelDia && <Confirm
         msg={`¿Eliminar el registro del ${confirmDelDia.fechaLabel} de ${emp.nombre}? Esta acción no se puede deshacer.`}
         okLabel="Eliminar registro"
-        onOk={()=>{
-          pendingDeletedRegs.current = [...pendingDeletedRegs.current, {eid: emp.id, fecha: confirmDelDia.fecha}];
+        onOk={async ()=>{
+          if (supabase) {
+            const { error } = await supabase.from("registros")
+              .delete()
+              .eq("eid", emp.id)
+              .eq("fecha", confirmDelDia.fecha);
+            if (error) {
+              setSaveError("No se pudo eliminar. Verifica tu conexión e intenta de nuevo");
+              setConfirmDelDia(null);
+              return;
+            }
+          }
           setRegistros(prev => prev.filter(r => !(r.eid === emp.id && r.fecha === confirmDelDia.fecha)));
           setConfirmDelDia(null);
           setTimeout(() => onDataChanged(), 0);
@@ -1094,7 +1187,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <span style={{fontSize:12,fontWeight:700,color:C.accent}}>{$$(b.monto)}</span>
-                  <button onClick={()=>eliminarBono(b.id)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:12,padding:"2px 4px"}}>×</button>
+                  <button onClick={()=>eliminarBono(b.id)} disabled={saving} style={{background:"none",border:"none",color:C.muted,cursor:saving?"not-allowed":"pointer",fontSize:12,padding:"2px 4px",opacity:saving?0.5:1}}>×</button>
                 </div>
               </div>;
             });
@@ -1160,7 +1253,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           {errBono && <div style={{fontSize:12,color:C.red}}>{errBono}</div>}
           <div style={{display:"flex",gap:8}}>
             <Btn onClick={()=>setMBono(false)} variant="secondary" full>Cancelar</Btn>
-            <Btn onClick={guardarBono} full>Guardar bono</Btn>
+            <Btn onClick={guardarBono} full disabled={saving}>{saving ? "Guardando..." : "Guardar bono"}</Btn>
           </div>
         </div>
       </Sheet>}
@@ -1205,7 +1298,7 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
           {errHist && <div style={{fontSize:12,color:C.red}}>{errHist}</div>}
           <div style={{display:"flex",gap:8}}>
             <Btn onClick={()=>setMHistorico(false)} variant="secondary" full>Cancelar</Btn>
-            <Btn onClick={guardarHistorico} full>Guardar</Btn>
+            <Btn onClick={guardarHistorico} full disabled={saving}>{saving ? "Guardando..." : "Guardar"}</Btn>
           </div>
         </div>
       </Sheet>}
@@ -1298,7 +1391,11 @@ function PantallaAdmin({proyectos,setProyectos,empleados,setEmpleados,registros,
       />}
       {delPerm2&&<Confirm
         msg={`Esta acción es IRREVERSIBLE.\nSe eliminará "${delPerm2.nombre}" y sus registros asociados.`}
-        onOk={()=>{
+        onOk={async ()=>{
+          if (supabase) {
+            await supabase.from("bonos").delete().eq("pid", delPerm2.id);
+            await supabase.from("papelera").delete().eq("proyecto_id", delPerm2.id);
+          }
           setBonos(prev=>prev.filter(b=>b.pid!==delPerm2.id));
           setPapelera(prev=>prev.filter(x=>x.id!==delPerm2.id));
           setDelPerm2(null);
@@ -1653,6 +1750,7 @@ export default function App(){
           if(payload.eventType === "DELETE") {
             setEmpleados(prev => prev.filter(e => e.id !== payload.old.id));
           } else {
+            if (pendingDeletedEids.current.includes(payload.new.id)) return;
             const nuevo = payload.new;
             const emp = { id: nuevo.id, nombre: nuevo.nombre, activo: nuevo.activo, tarifa: nuevo.tarifa };
             setEmpleados(prev => {
@@ -1668,6 +1766,7 @@ export default function App(){
           if(payload.eventType === "DELETE") {
             setBonos(prev => prev.filter(b => b.id !== payload.old.id));
           } else {
+            if (pendingDeletedEids.current.includes(payload.new.eid)) return;
             const n = payload.new;
             const bono = {id:n.id,eid:n.eid,pid:n.pid,monto:n.monto,concepto:n.concepto,fecha:n.fecha};
             setBonos(prev => {
@@ -1706,6 +1805,12 @@ export default function App(){
       const regsToDelete = [...pendingDeletedRegs.current];
       setSaving(true);
       setSaveError("");
+      let fechaLimiteStr = null;
+      if (esLimpieza) {
+        const fechaLimite = new Date();
+        fechaLimite.setDate(fechaLimite.getDate() - 2);
+        fechaLimiteStr = fechaLimite.toISOString().split("T")[0];
+      }
       try {
         if(eidsToDelete.length > 0) {
           for(const eid of eidsToDelete) {
@@ -1728,8 +1833,14 @@ export default function App(){
             if(!proyIds.has(row.id)) await supabase.from("proyectos").delete().eq("id", row.id);
           }
         }
-        if(empleados.length > 0) {
-          await supabase.from("empleados").upsert(empleados.map(e=>({id:e.id,nombre:e.nombre,activo:e.activo,tarifa:e.tarifa})),{onConflict:"id"});
+        const empleadosAUpsertear = empleados.filter(
+          e => !pendingDeletedEids.current.includes(e.id)
+        );
+        if(empleadosAUpsertear.length > 0) {
+          await supabase.from("empleados").upsert(
+            empleadosAUpsertear.map(e => ({ id: e.id, nombre: e.nombre, activo: e.activo, tarifa: e.tarifa })),
+            { onConflict: "id" }
+          );
         }
         if(esLimpieza) {
           const { data: empExist } = await supabase.from("empleados").select("id");
@@ -1737,17 +1848,21 @@ export default function App(){
           for(const row of empExist || []) {
             if(!empIds.has(row.id)) await supabase.from("empleados").delete().eq("id", row.id);
           }
-          const { data: todosLosRegs } = await supabase.from("registros").select("eid");
+          const { data: todosLosRegs } = await supabase.from("registros").select("eid,fecha");
           const empIdsActuales = new Set(empleados.map(e => e.id));
           for(const row of todosLosRegs || []) {
             if(!empIdsActuales.has(row.eid)) {
-              await supabase.from("registros").delete().eq("eid", row.eid);
+              if (row.fecha >= fechaLimiteStr) continue;
+              await supabase.from("registros").delete().eq("eid", row.eid).eq("fecha", row.fecha);
             }
           }
         }
-        if(registros.length > 0) {
+        const registrosAUpsertear = registros.filter(
+          r => !pendingDeletedEids.current.includes(r.eid)
+        );
+        if(registrosAUpsertear.length > 0) {
           await supabase.from("registros").upsert(
-            registros.map(r => ({eid:r.eid, llenador_id:r.llenadorId, fecha:r.fecha, items:r.items})),
+            registrosAUpsertear.map(r => ({eid:r.eid, llenador_id:r.llenadorId, fecha:r.fecha, items:r.items})),
             {onConflict:"eid,fecha"}
           );
         }
@@ -1756,6 +1871,7 @@ export default function App(){
           const regKeysEnState = new Set(registros.map(r => `${r.eid}__${r.fecha}`));
           for(const row of todosRegExist || []) {
             if(!regKeysEnState.has(`${row.eid}__${row.fecha}`)) {
+              if (row.fecha >= fechaLimiteStr) continue;
               await supabase.from("registros").delete().eq("eid", row.eid).eq("fecha", row.fecha);
             }
           }
@@ -1773,9 +1889,12 @@ export default function App(){
             }
           }
         }
-        if(bonos.length > 0) {
+        const bonosAUpsertear = bonos.filter(
+          b => !pendingDeletedEids.current.includes(b.eid)
+        );
+        if(bonosAUpsertear.length > 0) {
           await supabase.from("bonos").upsert(
-            bonos.map(b => ({id:b.id, eid:b.eid, pid:b.pid, monto:b.monto, concepto:b.concepto, fecha:b.fecha})),
+            bonosAUpsertear.map(b => ({id:b.id, eid:b.eid, pid:b.pid, monto:b.monto, concepto:b.concepto, fecha:b.fecha})),
             {onConflict:"id"}
           );
         }
@@ -1868,7 +1987,7 @@ export default function App(){
           {screen==="home"&&<PantallaInicio onSelect={ir}/>}
           {screen==="worker"&&<PantallaTrabajador proyectos={proyectos} empleados={empleados} registros={registros} onGuardar={guardarRegistro} onBack={()=>setScreen("home")} saving={saving} saveError={saveError}/>}
           {screen==="pin"&&<PantallaPIN onSuccess={()=>{setAuthed(true);setScreen("admin");}} onBack={()=>setScreen("home")}/>}
-          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} bonos={bonos} setBonos={setBonos} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} saveError={saveError} onDataChanged={() => setSyncTrigger(t => t+1)} pendingDeletedEids={pendingDeletedEids} pendingDeletedRegs={pendingDeletedRegs}/>}
+          {screen==="admin"&&authed&&<PantallaAdmin proyectos={proyectos} setProyectos={setProyectos} empleados={empleados} setEmpleados={setEmpleados} registros={registros} setRegistros={setRegistros} papelera={papelera} setPapelera={setPapelera} bonos={bonos} setBonos={setBonos} onBack={()=>{setAuthed(false);setScreen("home");}} saving={saving} setSaving={setSaving} saveError={saveError} setSaveError={setSaveError} onDataChanged={() => setSyncTrigger(t => t+1)} pendingDeletedEids={pendingDeletedEids} pendingDeletedRegs={pendingDeletedRegs}/>}
         </div>
 
         <div style={{height:22,background:"#0D0D0D",borderTop:"1px solid #1F1F1F",display:"flex",alignItems:"center",justifyContent:"center"}}>
